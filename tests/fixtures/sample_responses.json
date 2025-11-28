@@ -1,0 +1,314 @@
+{
+  "means_end_chain_samples": [
+    {
+      "turn": 1,
+      "question": "What's your initial reaction to this product?",
+      "response": "I like the price point. It's really affordable compared to other brands I've tried.",
+      "expected_nodes": [
+        {
+          "type": "attribute",
+          "label": "affordable_price",
+          "quote": "It's really affordable"
+        }
+      ],
+      "expected_edges": [],
+      "expected_richness": 0.5
+    },
+    {
+      "turn": 2,
+      "question": "What specifically about the affordable price matters to you?",
+      "response": "Well, being affordable means I can buy it every week without worrying about my budget. That's really important for my family.",
+      "expected_nodes": [
+        {
+          "type": "functional_consequence",
+          "label": "regular_purchase",
+          "quote": "I can buy it every week"
+        },
+        {
+          "type": "psychosocial_consequence",
+          "label": "financial_peace_of_mind",
+          "quote": "without worrying about my budget"
+        },
+        {
+          "type": "value",
+          "label": "family_wellbeing",
+          "quote": "important for my family"
+        }
+      ],
+      "expected_edges": [
+        {
+          "type": "leads_to",
+          "source": "affordable_price",
+          "target": "regular_purchase",
+          "quote": "being affordable means I can buy it every week"
+        },
+        {
+          "type": "leads_to",
+          "source": "regular_purchase",
+          "target": "financial_peace_of_mind",
+          "quote": "buy it every week without worrying about my budget"
+        },
+        {
+          "type": "leads_to",
+          "source": "financial_peace_of_mind",
+          "target": "family_wellbeing",
+          "quote": "without worrying about my budget. That's really important for my family"
+        }
+      ],
+      "expected_richness": 5.5
+    },
+    {
+      "turn": 3,
+      "question": "Tell me more about what matters for your family.",
+      "response": "I want to make sure they have good nutrition, but I also can't overspend. Finding that balance is key.",
+      "expected_nodes": [
+        {
+          "type": "value",
+          "label": "nutrition_priority",
+          "quote": "good nutrition"
+        },
+        {
+          "type": "value",
+          "label": "budget_management",
+          "quote": "can't overspend"
+        }
+      ],
+      "expected_edges": [],
+      "expected_richness": 4.0
+    },
+    {
+      "turn": 4,
+      "question": "How does this product help with that balance?",
+      "response": "The packaging is convenient too - I can grab it quickly in the morning when I'm rushed. That saves me time.",
+      "expected_nodes": [
+        {
+          "type": "attribute",
+          "label": "convenient_packaging",
+          "quote": "The packaging is convenient"
+        },
+        {
+          "type": "functional_consequence",
+          "label": "time_saving",
+          "quote": "saves me time"
+        },
+        {
+          "type": "functional_consequence",
+          "label": "quick_access",
+          "quote": "grab it quickly"
+        }
+      ],
+      "expected_edges": [
+        {
+          "type": "leads_to",
+          "source": "convenient_packaging",
+          "target": "quick_access",
+          "quote": "packaging is convenient too - I can grab it quickly"
+        },
+        {
+          "type": "leads_to",
+          "source": "quick_access",
+          "target": "time_saving",
+          "quote": "grab it quickly in the morning when I'm rushed. That saves me time"
+        }
+      ],
+      "expected_richness": 4.0
+    }
+  ],
+
+  "usage_script_samples": [
+    {
+      "turn": 1,
+      "question": "Tell me about a time you used this product in the morning.",
+      "response": "This morning I was running late for work. I felt stressed and hungry.",
+      "expected_nodes": [
+        {
+          "type": "trigger",
+          "label": "running_late",
+          "quote": "running late for work"
+        },
+        {
+          "type": "trigger",
+          "label": "hunger",
+          "quote": "felt stressed and hungry"
+        },
+        {
+          "type": "emotion",
+          "label": "stress",
+          "quote": "felt stressed"
+        },
+        {
+          "type": "setting",
+          "label": "morning_rush",
+          "quote": "This morning"
+        }
+      ],
+      "expected_edges": [
+        {
+          "type": "in_setting",
+          "source": "running_late",
+          "target": "morning_rush",
+          "quote": "This morning I was running late"
+        },
+        {
+          "type": "causes",
+          "source": "running_late",
+          "target": "stress",
+          "quote": "running late for work. I felt stressed"
+        }
+      ],
+      "expected_richness": 5.5
+    },
+    {
+      "turn": 2,
+      "question": "What happened right before that?",
+      "response": "I grabbed the product from my fridge, tore open the package, and ate it standing in the kitchen.",
+      "expected_nodes": [
+        {
+          "type": "action",
+          "label": "grabbed_from_fridge",
+          "quote": "grabbed the product from my fridge"
+        },
+        {
+          "type": "action",
+          "label": "opened_package",
+          "quote": "tore open the package"
+        },
+        {
+          "type": "action",
+          "label": "ate_standing",
+          "quote": "ate it standing"
+        },
+        {
+          "type": "setting",
+          "label": "in_kitchen",
+          "quote": "in the kitchen"
+        }
+      ],
+      "expected_edges": [
+        {
+          "type": "happens_before",
+          "source": "grabbed_from_fridge",
+          "target": "opened_package",
+          "quote": "grabbed the product from my fridge, tore open the package"
+        },
+        {
+          "type": "happens_before",
+          "source": "opened_package",
+          "target": "ate_standing",
+          "quote": "tore open the package, and ate it standing"
+        },
+        {
+          "type": "in_setting",
+          "source": "ate_standing",
+          "target": "in_kitchen",
+          "quote": "ate it standing in the kitchen"
+        }
+      ],
+      "expected_richness": 5.0
+    },
+    {
+      "turn": 3,
+      "question": "Then what happened after you ate it?",
+      "response": "I felt less stressed immediately. It satisfied my hunger and I made it to work on time. That made me feel relieved.",
+      "expected_nodes": [
+        {
+          "type": "outcome",
+          "label": "hunger_satisfied",
+          "quote": "satisfied my hunger"
+        },
+        {
+          "type": "outcome",
+          "label": "arrived_on_time",
+          "quote": "made it to work on time"
+        },
+        {
+          "type": "emotion",
+          "label": "relief",
+          "quote": "felt relieved"
+        },
+        {
+          "type": "emotion",
+          "label": "reduced_stress",
+          "quote": "felt less stressed immediately"
+        }
+      ],
+      "expected_edges": [
+        {
+          "type": "causes",
+          "source": "hunger_satisfied",
+          "target": "reduced_stress",
+          "quote": "satisfied my hunger...felt less stressed"
+        },
+        {
+          "type": "causes",
+          "source": "arrived_on_time",
+          "target": "relief",
+          "quote": "made it to work on time. That made me feel relieved"
+        }
+      ],
+      "expected_richness": 7.5
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "description": "Empty response",
+      "response": "",
+      "expected_nodes": [],
+      "expected_edges": [],
+      "expected_richness": 0.0
+    },
+    {
+      "description": "Very short response",
+      "response": "Yes.",
+      "expected_nodes": [],
+      "expected_edges": [],
+      "expected_richness": 0.0
+    },
+    {
+      "description": "Ambiguous pronouns",
+      "response": "I like it because it's good.",
+      "expected_nodes": [
+        {
+          "type": "attribute",
+          "label": "positive_quality",
+          "quote": "it's good"
+        }
+      ],
+      "expected_edges": [],
+      "expected_richness": 0.5,
+      "notes": "Should handle coreference - 'it' likely refers to product"
+    },
+    {
+      "description": "Off-topic response",
+      "response": "The weather is really nice today.",
+      "expected_nodes": [],
+      "expected_edges": [],
+      "expected_richness": 0.0,
+      "notes": "Should recognize as not product-related"
+    },
+    {
+      "description": "Multiple topics in one response",
+      "response": "I like the taste but the price is too high. Also, the packaging is wasteful.",
+      "expected_nodes": [
+        {
+          "type": "attribute",
+          "label": "pleasant_taste",
+          "quote": "I like the taste"
+        },
+        {
+          "type": "attribute",
+          "label": "high_price",
+          "quote": "price is too high"
+        },
+        {
+          "type": "attribute",
+          "label": "wasteful_packaging",
+          "quote": "packaging is wasteful"
+        }
+      ],
+      "expected_edges": [],
+      "expected_richness": 1.5
+    }
+  ]
+}

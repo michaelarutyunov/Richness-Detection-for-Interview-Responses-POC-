@@ -1,0 +1,28 @@
+# Core Dependencies
+python-dotenv==1.0.1
+pyyaml==6.0.1
+pydantic>=2.11.10,<=2.12.4  # Compatible with Gradio 6.0.0
+pydantic-settings>=2.6.0
+
+# Graph Processing
+networkx==3.2.1
+
+# LLM Clients
+anthropic>=0.40.0
+openai>=1.54.0
+
+# UI
+gradio>=6.0.0,<7.0.0
+
+# Data & Utilities
+python-dateutil==2.8.2
+
+# Optional: Visualization (for debugging)
+matplotlib>=3.8.2
+plotly>=5.18.0
+
+# Development Dependencies (not needed on HF Space, but useful locally)
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+black>=23.12.1
+ruff>=0.1.11

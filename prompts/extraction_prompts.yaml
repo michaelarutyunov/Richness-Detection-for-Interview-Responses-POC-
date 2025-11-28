@@ -1,0 +1,171 @@
+# LLM Prompts for Graph Extraction
+# Used by Response Processor to extract structured graph deltas from participant responses
+
+graph_extraction:
+  system_prompt: |
+    You are a precise graph extraction system for marketing research interviews.
+    Your job is to extract structured information from consumer responses about products.
+
+    IMPORTANT RULES:
+    1. Extract ONLY information explicitly stated or strongly implied by the participant
+    2. Do NOT infer, assume, or hallucinate nodes/edges not supported by the text
+    3. Use the exact node and edge types defined in the schema
+    4. Include the exact quote that supports each extraction
+    5. Create edges only when relationships are clearly stated or logically necessary
+    6. If uncertain, extract less rather than hallucinating more
+
+    You will receive:
+    - Schema Context: Valid node types, edge types, and extraction examples
+    - Recent Conversation: Last 2-3 turns for coreference resolution
+    - Participant Response: The text to analyze
+
+    Output Format:
+    Return a JSON object with:
+    - nodes_added: Array of {type, label, quote}
+    - edges_added: Array of {type, source, target, quote}
+
+  user_prompt_template: |
+    # SCHEMA CONTEXT
+
+    ## Node Types
+    {node_types_description}
+
+    ## Edge Types
+    {edge_types_description}
+
+    ## Existing Graph Nodes
+    {existing_nodes}
+
+    # RECENT CONVERSATION
+
+    {conversation_context}
+
+    # PARTICIPANT'S LATEST RESPONSE
+
+    "{participant_response}"
+
+    # EXTRACTION TASK
+
+    Analyze the participant's response and extract:
+    1. **New Nodes**: Concepts mentioned that aren't in the existing graph
+       - Match to the defined node types
+       - Create clear, descriptive labels (lowercase_with_underscores)
+       - Include the exact quote that supports each node
+
+    2. **New Edges**: Relationships between nodes (existing or new)
+       - Only create edges for clearly stated or logically necessary relationships
+       - Match to the defined edge types
+       - Ensure source and target match valid types for the edge
+       - Include the quote that establishes the relationship
+
+    Remember:
+    - Quality over quantity - extract only what's clearly there
+    - Use existing node labels when referring to already-mentioned concepts
+    - Empty extractions are OK if response adds no new graph information
+
+    Return your extraction as JSON.
+
+  # Function calling schema for structured output
+  function_calling_schema:
+    name: "extract_graph_delta"
+    description: "Extract nodes and edges from participant response"
+    parameters:
+      type: "object"
+      required: ["nodes_added", "edges_added"]
+      properties:
+        nodes_added:
+          type: "array"
+          description: "New nodes to add to the graph"
+          items:
+            type: "object"
+            required: ["type", "label", "quote"]
+            properties:
+              type:
+                type: "string"
+                description: "Node type from schema (e.g., 'attribute', 'value')"
+              label:
+                type: "string"
+                description: "Descriptive label (lowercase_with_underscores)"
+              quote:
+                type: "string"
+                description: "Exact quote from response supporting this node"
+
+        edges_added:
+          type: "array"
+          description: "New edges to add to the graph"
+          items:
+            type: "object"
+            required: ["type", "source", "target", "quote"]
+            properties:
+              type:
+                type: "string"
+                description: "Edge type from schema (e.g., 'leads_to', 'causes')"
+              source:
+                type: "string"
+                description: "Source node label (must exist or be in nodes_added)"
+              target:
+                type: "string"
+                description: "Target node label (must exist or be in nodes_added)"
+              quote:
+                type: "string"
+                description: "Quote from response establishing this relationship"
+
+  # Few-shot examples (optional, for better quality)
+  examples:
+    - input: "I like that it's affordable, so I can buy it every week without worrying about my budget."
+      output:
+        nodes_added:
+          - type: "attribute"
+            label: "affordable_price"
+            quote: "it's affordable"
+          - type: "functional_consequence"
+            label: "regular_purchase"
+            quote: "I can buy it every week"
+          - type: "psychosocial_consequence"
+            label: "financial_peace_of_mind"
+            quote: "without worrying about my budget"
+        edges_added:
+          - type: "leads_to"
+            source: "affordable_price"
+            target: "regular_purchase"
+            quote: "it's affordable, so I can buy it every week"
+          - type: "leads_to"
+            source: "regular_purchase"
+            target: "financial_peace_of_mind"
+            quote: "buy it every week without worrying about my budget"
+
+    - input: "The packaging is really convenient - I can open it with one hand while holding my coffee."
+      output:
+        nodes_added:
+          - type: "attribute"
+            label: "convenient_packaging"
+            quote: "The packaging is really convenient"
+          - type: "functional_consequence"
+            label: "one_handed_opening"
+            quote: "I can open it with one hand"
+          - type: "setting"
+            label: "morning_multitasking"
+            quote: "while holding my coffee"
+        edges_added:
+          - type: "leads_to"
+            source: "convenient_packaging"
+            target: "one_handed_opening"
+            quote: "The packaging is really convenient - I can open it with one hand"
+
+# Coreference Resolution Prompts (Phase 2 feature)
+coreference_resolution:
+  system_prompt: |
+    Help resolve ambiguous references in interview responses.
+    Participant may use pronouns like "it", "that", "this" without clear antecedents.
+    Your job is to identify what they're referring to based on conversation context.
+
+  user_prompt_template: |
+    Recent conversation:
+    {conversation_context}
+
+    Latest response contains: "{ambiguous_phrase}"
+
+    What is "{ambiguous_phrase}" most likely referring to?
+    Choose from: {candidate_nodes}
+
+    If uncertain, respond "unclear".

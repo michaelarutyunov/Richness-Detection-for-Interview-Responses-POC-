@@ -1,0 +1,56 @@
+# schema_script_v0.1.yaml
+
+# This models the consumer's mind as a temporal script—a sequence of moments, triggers, and actions that constitute a usage occasion. It’s less about what they value and more about when, where, and how the product fits into their life story.
+
+domain: "fmcg_usage_script"
+
+node_types:
+  - name: "trigger"
+    description: "Events that initiate usage (feeling hungry, seeing ad)"
+    richness_weight: 1.0
+    probing_prompt: "What happened right before that?"
+    
+  - name: "action"
+    description: "Specific behaviors (open package, share with kids)"
+    richness_weight: 0.7
+    probing_prompt: "Walk me through the steps."
+    
+  - name: "outcome"
+    description: "Immediate results (satisfied, made a mess)"
+    richness_weight: 1.2
+    probing_prompt: "Then what happened?"
+    
+  - name: "setting"
+    description: "Physical/social context (at work, alone, with family)"
+    richness_weight: 0.8
+    probing_prompt: "Where were you? Who was there?"
+    
+  - name: "emotion"
+    description: "Feelings at specific moments (relief, guilt, joy)"
+    richness_weight: 1.5
+    probing_prompt: "How did that make you feel then?"
+
+edge_types:
+  - name: "happens_before"
+    description: "A precedes B in time"
+    valid_sources: ["trigger", "action", "outcome"]
+    valid_targets: ["action", "outcome", "emotion"]
+    richness_boost: 0.5  # Temporal links are baseline
+    
+  - name: "causes"
+    description: "A directly brings about B"
+    valid_sources: ["trigger", "action"]
+    valid_targets: ["outcome", "emotion"]
+    richness_boost: 2.0  # Causal chains are gold
+    
+  - name: "in_setting"
+    description: "A occurs within context B"
+    valid_sources: ["trigger", "action", "outcome"]
+    valid_targets: ["setting"]
+    richness_boost: 1.0  # Context anchors the narrative
+
+seed_nodes:
+  - name: "morning_routine"  # setting
+    type: "setting"
+  - name: "impulse_purchase"  # trigger
+    type: "trigger"

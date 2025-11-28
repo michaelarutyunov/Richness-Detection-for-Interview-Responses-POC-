@@ -1,0 +1,45 @@
+# schema_mec_v0.1.yaml
+
+# This models the consumer's mind as a vertical ladder of abstraction, where thoughts are organized by how close they are to core values. It's the classic marketing research view: Attributes drive Benefits, which fulfill Values.
+
+domain: "fmcg_means_end_chain"
+
+node_types:
+  - name: "attribute"
+    description: "Concrete, observable product features (taste, price, packaging)"
+    richness_weight: 0.5
+    probing_prompt: "What specifically about {node} matters to you?"
+    
+  - name: "functional_consequence"
+    description: "Direct, tangible outcomes (saves time, reduces mess)"
+    richness_weight: 1.0
+    probing_prompt: "How does {node} affect your daily routine?"
+    
+  - name: "psychosocial_consequence"
+    description: "Personal/social meanings (feel competent, look good to others)"
+    richness_weight: 1.5
+    probing_prompt: "What does using this say about you?"
+    
+  - name: "value"
+    description: "End goals (security, belonging, self-esteem)"
+    richness_weight: 2.0
+    probing_prompt: "Why is that important to your life?"
+
+edge_types:
+  - name: "leads_to"
+    description: "A causes or enables B in the value chain"
+    valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    valid_targets: ["functional_consequence", "psychosocial_consequence", "value"]
+    richness_boost: 1.0  # Linking up the chain is key
+    
+  - name: "blocks"
+    description: "A prevents achieving B"
+    valid_sources: ["attribute", "functional_consequence"]
+    valid_targets: ["value"]
+    richness_boost: 2.0  # Reveals deep barriers
+
+seed_nodes:
+  - name: "price_point"  # attribute
+    type: "attribute"
+  - name: "convenience"  # value
+    type: "value"

@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific
+data/                 # Interview logs and outputs (don't commit)
+notebooks/            # Local experimentation (optional)
+*.jsonl               # Interview transcripts
+!.env.example         # Keep template, but not real .env

@@ -1,0 +1,117 @@
+schema_version: "0.1.0"
+domain: "fmcg_means_end_chain"
+
+# Interview Configuration
+interview_config:
+  max_turns: 20  # Minimal POC scope
+  latency_budget_seconds: 3.0
+  coverage_priority_boost: 10
+  depth_priority_boost: 8
+  phase_transition_turn: 5
+  dead_end_threshold: 0.5
+  dead_end_probe_count: 3
+
+# Richness Scoring
+richness_scoring:
+  formula: "sum(node_weights) + sum(edge_boosts)"
+  thresholds:
+    shallow: 0.5
+    moderate: 2.0
+    rich: 5.0
+
+# Node Types
+node_types:
+  - name: "attribute"
+    description: "Concrete, observable product features (taste, price, packaging, size)"
+    richness_weight: 0.5
+    probing_prompt: "What specifically about {node} matters to you?"
+    llm_extraction_prompt: |
+      Extract concrete product attributes the participant mentioned.
+      Look for: price, taste, size, packaging, color, smell, texture, brand.
+      Examples:
+      - "costs too much" → price_too_high
+      - "nice flavor" → pleasant_taste
+      - "easy to open" → convenient_packaging
+    validation_regex: "^[a-z_]{3,40}$"
+
+  - name: "functional_consequence"
+    description: "Direct, tangible outcomes from using the product (saves time, reduces mess, lasts longer)"
+    richness_weight: 1.0
+    probing_prompt: "How does {node} affect your daily routine?"
+    llm_extraction_prompt: |
+      Extract functional consequences - practical effects of product features.
+      Look for: time-saving, convenience, performance, durability, efficiency.
+      Examples:
+      - "saves me time in the morning" → time_saving
+      - "keeps fresh longer" → extended_freshness
+      - "doesn't spill" → mess_prevention
+    validation_regex: "^[a-z_]{3,40}$"
+
+  - name: "psychosocial_consequence"
+    description: "Personal/social meanings and feelings (feel competent, look good to others, feel modern)"
+    richness_weight: 1.5
+    probing_prompt: "What does {node} say about you or how you feel?"
+    llm_extraction_prompt: |
+      Extract psychosocial consequences - emotional and social impacts.
+      Look for: self-perception, social image, emotional states, identity.
+      Examples:
+      - "makes me feel like a good parent" → positive_self_image
+      - "people notice it's premium" → social_status
+      - "less stressed" → reduced_anxiety
+    validation_regex: "^[a-z_]{3,40}$"
+
+  - name: "value"
+    description: "End goals and core values (security, belonging, self-esteem, family wellbeing)"
+    richness_weight: 2.0
+    probing_prompt: "Why is {node} important to your life overall?"
+    llm_extraction_prompt: |
+      Extract terminal values - fundamental life goals.
+      Look for: security, belonging, achievement, family, health, freedom.
+      Examples:
+      - "important for my family's health" → family_wellbeing
+      - "gives me peace of mind" → security
+      - "helps me be myself" → authenticity
+    validation_regex: "^[a-z_]{3,40}$"
+
+# Edge Types
+edge_types:
+  - name: "leads_to"
+    description: "A causes or enables B in the value chain"
+    valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    valid_targets: ["functional_consequence", "psychosocial_consequence", "value"]
+    richness_boost: 1.0  # Linking up the chain is key insight
+
+  - name: "blocks"
+    description: "A prevents or hinders achieving B"
+    valid_sources: ["attribute", "functional_consequence"]
+    valid_targets: ["psychosocial_consequence", "value"]
+    richness_boost: 2.0  # Reveals deep barriers - very valuable
+
+# Seed Nodes (starting concepts to ensure coverage)
+seed_nodes:
+  - name: "price_point"
+    type: "attribute"
+    label: "price"
+    introduction_prompt: "Let's talk about price. What are your thoughts on the pricing of this product?"
+
+  - name: "convenience"
+    type: "value"
+    label: "convenience_value"
+    introduction_prompt: "How important is convenience in your daily life when it comes to products like this?"
+
+  - name: "product_quality"
+    type: "attribute"
+    label: "perceived_quality"
+    introduction_prompt: "What's your sense of the overall quality of this product?"
+
+# Metadata
+schema_description: |
+  Means-End Chain lens for consumer mental models.
+  Models consumer thinking as a vertical ladder of abstraction:
+  Attributes → Functional Consequences → Psychosocial Consequences → Values
+
+  Best for: Understanding WHY consumers value certain product features,
+  uncovering motivational drivers, and positioning/messaging strategy.
+
+author: "POC Development Team"
+created_date: "2025-11-28"
