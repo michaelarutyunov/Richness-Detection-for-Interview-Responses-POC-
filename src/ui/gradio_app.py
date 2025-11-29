@@ -5,9 +5,9 @@ Provides a web-based chat interface for conducting interviews.
 Compatible with HuggingFace Spaces deployment.
 """
 
-import gradio as gr
-from typing import List, Tuple, Optional
 import logging
+
+import gradio as gr
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -19,9 +19,9 @@ class InterviewUI:
 
     def __init__(self):
         """Initialize the interview UI."""
-        self.conversation_history: List[Tuple[str, str]] = []
+        self.conversation_history: list[tuple[str, str]] = []
         self.turn_number: int = 0
-        self.session_id: Optional[str] = None
+        self.session_id: str | None = None
 
         # Will be wired up to Interview Controller in Phase 4
         self.controller = None
@@ -51,11 +51,7 @@ class InterviewUI:
         logger.info("Interview started")
         return first_question
 
-    def process_response(
-        self,
-        user_response: str,
-        history: List
-    ) -> Tuple[List, str]:
+    def process_response(self, user_response: str, history: list) -> tuple[list, str]:
         """
         Process participant response and generate next question.
 
@@ -154,25 +150,14 @@ class InterviewUI:
                         )
 
                     with gr.Row():
-                        submit_btn = gr.Button(
-                            "Submit",
-                            variant="primary",
-                            size="lg"
-                        )
-                        clear_btn = gr.Button(
-                            "Clear",
-                            size="lg"
-                        )
+                        submit_btn = gr.Button("Submit", variant="primary", size="lg")
+                        clear_btn = gr.Button("Clear", size="lg")
 
                 # Right column: Interview metadata & stats
                 with gr.Column(scale=1):
                     gr.Markdown("### Interview Progress")
 
-                    turn_display = gr.Number(
-                        label="Current Turn",
-                        value=0,
-                        interactive=False
-                    )
+                    turn_display = gr.Number(label="Current Turn", value=0, interactive=False)
 
                     gr.Markdown("### Graph Statistics")
                     graph_stats = gr.JSON(
@@ -181,15 +166,12 @@ class InterviewUI:
                             "nodes": 0,
                             "edges": 0,
                             "coverage": "0%",
-                        }
+                        },
                     )
 
                     gr.Markdown("### Session Info")
-                    session_info = gr.Textbox(
-                        label="Session ID",
-                        value="Not started",
-                        interactive=False,
-                        max_lines=1
+                    _ = gr.Textbox(
+                        label="Session ID", value="Not started", interactive=False, max_lines=1
                     )
 
             # Instructions
@@ -218,34 +200,23 @@ class InterviewUI:
             submit_btn.click(
                 fn=self.process_response,
                 inputs=[user_input, chatbot],
-                outputs=[chatbot, user_input]
-            ).then(
-                fn=update_turn_number,
-                inputs=[chatbot],
-                outputs=[turn_display]
-            )
+                outputs=[chatbot, user_input],
+            ).then(fn=update_turn_number, inputs=[chatbot], outputs=[turn_display])
 
             # Allow Enter key to submit (only works when input is focused)
             user_input.submit(
                 fn=self.process_response,
                 inputs=[user_input, chatbot],
-                outputs=[chatbot, user_input]
-            ).then(
-                fn=update_turn_number,
-                inputs=[chatbot],
-                outputs=[turn_display]
-            )
+                outputs=[chatbot, user_input],
+            ).then(fn=update_turn_number, inputs=[chatbot], outputs=[turn_display])
 
             clear_btn.click(
                 fn=lambda: ([], "", 0, {"nodes": 0, "edges": 0, "coverage": "0%"}),
-                outputs=[chatbot, user_input, turn_display, graph_stats]
+                outputs=[chatbot, user_input, turn_display, graph_stats],
             )
 
             # Initialize with first question on load
-            app.load(
-                fn=self.start_interview,
-                outputs=None
-            )
+            app.load(fn=self.start_interview, outputs=None)
 
         return app
 

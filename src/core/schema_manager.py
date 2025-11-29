@@ -68,9 +68,7 @@ class SchemaManager:
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML in {self.schema_path}: {e}") from e
         except Exception as e:
-            raise ValueError(
-                f"Failed to load schema from {self.schema_path}: {e}"
-            ) from e
+            raise ValueError(f"Failed to load schema from {self.schema_path}: {e}") from e
 
     def validate_schema(self) -> bool:
         """

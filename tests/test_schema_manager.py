@@ -2,7 +2,6 @@
 Unit tests for SchemaManager.
 """
 
-
 import pytest
 
 from src.core.schema_manager import SchemaManager
