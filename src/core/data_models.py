@@ -27,6 +27,9 @@ class Node(BaseModel):
     label: str = Field(..., description="Human-readable label")
     creation_turn: int = Field(..., description="Turn number when node was created")
     visit_count: int = Field(default=0, description="Number of times this node was probed")
+    last_visit_turn: int | None = Field(
+        default=None, description="Turn number when node was last visited (for time-aware recency)"
+    )
     source_quotes: list[str] = Field(
         default_factory=list, description="Participant quotes that led to this node"
     )
@@ -57,6 +60,12 @@ class Edge(BaseModel):
     creation_turn: int = Field(..., description="Turn number when edge was created")
     source_quote: str = Field(..., description="Participant quote that established this connection")
     weight: float = Field(default=1.0, description="Edge weight/strength")
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score for this relationship (0.0-1.0)"
+    )
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional edge metadata")
 
 
@@ -319,6 +328,12 @@ class ExtractedEdge(BaseModel):
     source: str
     target: str
     quote: str
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Extraction confidence (0.0-1.0)"
+    )
 
 
 class LLMExtractionResponse(BaseModel):

@@ -35,6 +35,7 @@ class ExtractedEdge:
     source: str
     target: str
     quote: str
+    confidence: float = 1.0  # Default to 1.0 for explicit relationships
 
 
 @dataclass
@@ -168,6 +169,7 @@ class Validator:
                 source = edge_raw.get("source")
                 target = edge_raw.get("target")
                 quote = edge_raw.get("quote", "")
+                confidence = edge_raw.get("confidence", 1.0)  # Default to 1.0 if not provided
 
                 # Check required fields
                 if not edge_type:
@@ -208,6 +210,17 @@ class Validator:
                     )
                     continue
 
+                # Validate confidence score
+                if not isinstance(confidence, (int, float)):
+                    warnings.append(f"Edge {source}->{target}: Invalid confidence type, using 1.0")
+                    confidence = 1.0
+                elif confidence < 0.0 or confidence > 1.0:
+                    warnings.append(
+                        f"Edge {source}->{target}: Confidence {confidence} out of range [0,1], "
+                        f"clamping to valid range"
+                    )
+                    confidence = max(0.0, min(1.0, confidence))
+
                 # Semantic validation: Check quote
                 if not quote:
                     warnings.append(f"Edge {source}->{target}: Empty quote")
@@ -218,7 +231,13 @@ class Validator:
 
                 # Edge is valid
                 cleaned_edges.append(
-                    ExtractedEdge(type=edge_type, source=source, target=target, quote=quote)
+                    ExtractedEdge(
+                        type=edge_type,
+                        source=source,
+                        target=target,
+                        quote=quote,
+                        confidence=confidence,
+                    )
                 )
 
             except Exception as e:

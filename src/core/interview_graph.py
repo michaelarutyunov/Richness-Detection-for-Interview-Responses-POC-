@@ -54,8 +54,14 @@ class InterviewGraph:
         if self.graph.has_node(node.id):
             existing_node = self.graph.nodes[node.id]["data"]
             existing_node.visit_count += 1
+            # Update last visit turn if provided in the new node
+            if node.last_visit_turn is not None:
+                existing_node.last_visit_turn = node.last_visit_turn
             existing_node.source_quotes.extend(node.source_quotes)
-            logger.debug(f"Merged node {node.id}, now {existing_node.visit_count} visits")
+            logger.debug(
+                f"Merged node {node.id}, now {existing_node.visit_count} visits "
+                f"(last visit: turn {existing_node.last_visit_turn})"
+            )
             return False  # Not a new node
 
         # Add new node

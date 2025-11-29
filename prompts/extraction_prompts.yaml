@@ -6,13 +6,31 @@ graph_extraction:
     You are a precise graph extraction system for marketing research interviews.
     Your job is to extract structured information from consumer responses about products.
 
+    EXTRACTION PHILOSOPHY - BALANCED APPROACH:
+    1. Extract EXPLICIT relationships stated by the participant (HIGH CONFIDENCE)
+    2. Extract STRONGLY IMPLIED relationships with clear causal language (MEDIUM CONFIDENCE)
+    3. Include confidence scores for each relationship (0.0-1.0)
+    4. Do NOT hallucinate or over-infer - when uncertain, mark as low confidence or skip
+
+    CAUSAL LANGUAGE MARKERS (indicate relationships):
+    - Direct: "because", "so", "therefore", "leads to", "causes", "results in"
+    - Implicit: "means", "that's why", "which is why", "enables me to"
+    - Sequential: "then", "after that", "which allows", "and so"
+    - Correlational: "goes with", "associated with", "related to", "comes with"
+
+    CONFIDENCE SCORING GUIDELINES:
+    - 1.0: Explicitly stated ("A causes B", "A leads to B")
+    - 0.8-0.9: Strong causal language ("A, so B", "A means B", "A because B")
+    - 0.6-0.7: Implicit temporal/logical connection ("A, then B", "A allows B")
+    - 0.4-0.5: Weak association (proximity in text, correlational language)
+    - <0.4: Speculative (DO NOT extract these)
+
     IMPORTANT RULES:
-    1. Extract ONLY information explicitly stated or strongly implied by the participant
-    2. Do NOT infer, assume, or hallucinate nodes/edges not supported by the text
-    3. Use the exact node and edge types defined in the schema
-    4. Include the exact quote that supports each extraction
-    5. Create edges only when relationships are clearly stated or logically necessary
-    6. If uncertain, extract less rather than hallucinating more
+    1. Use the exact node and edge types defined in the schema
+    2. Include the exact quote that supports each extraction
+    3. Assign confidence scores to ALL edges based on guidelines above
+    4. Node confidence always 1.0 (nodes are explicitly mentioned)
+    5. If uncertain about a relationship, either give it low confidence (0.6-0.7) or skip it
 
     You will receive:
     - Schema Context: Valid node types, edge types, and extraction examples
@@ -53,10 +71,11 @@ graph_extraction:
        - Include the exact quote that supports each node
 
     2. **New Edges**: Relationships between nodes (existing or new)
-       - Only create edges for clearly stated or logically necessary relationships
-       - Match to the defined edge types
+       - Extract both explicit and implicit relationships
+       - Match to the defined edge types (including same-level relationships like "correlates_with")
        - Ensure source and target match valid types for the edge
        - Include the quote that establishes the relationship
+       - IMPORTANT: Assign confidence score (0.0-1.0) based on causal language strength
 
     Remember:
     - Quality over quantity - extract only what's clearly there
@@ -95,11 +114,11 @@ graph_extraction:
           description: "New edges to add to the graph"
           items:
             type: "object"
-            required: ["type", "source", "target", "quote"]
+            required: ["type", "source", "target", "quote", "confidence"]
             properties:
               type:
                 type: "string"
-                description: "Edge type from schema (e.g., 'leads_to', 'causes')"
+                description: "Edge type from schema (e.g., 'leads_to', 'blocks', 'correlates_with')"
               source:
                 type: "string"
                 description: "Source node label (must exist or be in nodes_added)"
@@ -109,6 +128,11 @@ graph_extraction:
               quote:
                 type: "string"
                 description: "Quote from response establishing this relationship"
+              confidence:
+                type: "number"
+                description: "Confidence score (0.0-1.0) based on causal language strength"
+                minimum: 0.0
+                maximum: 1.0
 
   # Few-shot examples (optional, for better quality)
   examples:
@@ -129,10 +153,12 @@ graph_extraction:
             source: "affordable_price"
             target: "regular_purchase"
             quote: "it's affordable, so I can buy it every week"
+            confidence: 0.9  # Strong causal language "so"
           - type: "leads_to"
             source: "regular_purchase"
             target: "financial_peace_of_mind"
             quote: "buy it every week without worrying about my budget"
+            confidence: 0.7  # Implicit connection (temporal sequence)
 
     - input: "The packaging is really convenient - I can open it with one hand while holding my coffee."
       output:
@@ -143,14 +169,15 @@ graph_extraction:
           - type: "functional_consequence"
             label: "one_handed_opening"
             quote: "I can open it with one hand"
-          - type: "setting"
+          - type: "attribute"
             label: "morning_multitasking"
             quote: "while holding my coffee"
         edges_added:
-          - type: "leads_to"
+          - type: "enables"
             source: "convenient_packaging"
             target: "one_handed_opening"
             quote: "The packaging is really convenient - I can open it with one hand"
+            confidence: 1.0  # Explicitly stated enablement
 
 # Coreference Resolution Prompts (Phase 2 feature)
 coreference_resolution:

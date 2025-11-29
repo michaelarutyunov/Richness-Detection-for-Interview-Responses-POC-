@@ -13,6 +13,7 @@ import yaml
 
 from src.core.interview_graph import InterviewGraph
 from src.interview.opportunity_ranker import QuestionStrategy, RankedOpportunity
+from src.interview.question_deduplicator import QuestionDeduplicator
 from src.llm.base_client import BaseLLMClient
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,11 @@ class QuestionGenerator:
         llm_client: BaseLLMClient | None = None,
         templates_path: str = "prompts/question_templates.yaml",
         use_llm: bool = True,
+        enable_repetition_detection: bool = True,
+        word_overlap_threshold: float = 0.6,
+        semantic_similarity_threshold: float = 0.75,
+        history_window: int = 5,
+        max_regeneration_attempts: int = 3,
     ):
         """
         Initialize question generator.
@@ -34,11 +40,29 @@ class QuestionGenerator:
             llm_client: Optional LLM client for natural question generation
             templates_path: Path to question templates YAML
             use_llm: Whether to use LLM for generation (vs templates only)
+            enable_repetition_detection: Whether to detect and avoid repetitive questions
+            word_overlap_threshold: Jaccard similarity threshold for word overlap (0.6 default)
+            semantic_similarity_threshold: Threshold for semantic similarity (0.75 default)
+            history_window: Number of recent questions to check for repetition (5 default)
+            max_regeneration_attempts: Max attempts to regenerate if repetitive (3 default)
         """
         self.llm = llm_client
         self.use_llm = use_llm and llm_client is not None
         self._templates = self._load_templates(templates_path)
         self._question_history = []  # Track recent questions
+
+        # Deduplication settings
+        self.enable_repetition_detection = enable_repetition_detection
+        self.max_regeneration_attempts = max_regeneration_attempts
+
+        # Create deduplicator if enabled
+        self.deduplicator = None
+        if enable_repetition_detection:
+            self.deduplicator = QuestionDeduplicator(
+                word_overlap_threshold=word_overlap_threshold,
+                semantic_similarity_threshold=semantic_similarity_threshold,
+                history_window=history_window,
+            )
 
     def _load_templates(self, templates_path: str) -> dict:
         """Load question templates from YAML."""
@@ -71,7 +95,7 @@ class QuestionGenerator:
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """
-        Generate question for ranked opportunity.
+        Generate question for ranked opportunity with deduplication retry logic.
 
         Args:
             opportunity: Ranked opportunity to explore
@@ -83,20 +107,56 @@ class QuestionGenerator:
         """
         conversation_history = conversation_history or []
 
-        # Try LLM generation first if enabled
-        if self.use_llm:
-            try:
-                question = await self._generate_with_llm(opportunity, graph, conversation_history)
-                if question:
-                    question = self._post_process_question(question)
-                    self._question_history.append(question)
-                    return question
-            except Exception as e:
-                logger.warning(f"LLM question generation failed: {e}. Using templates.")
+        # Deduplication retry loop
+        for attempt in range(self.max_regeneration_attempts):
+            # Try LLM generation first if enabled
+            question = None
+            if self.use_llm:
+                try:
+                    # Add anti-repetition context for attempts 2+
+                    anti_repetition_context = None
+                    if attempt > 0 and self.deduplicator:
+                        anti_repetition_context = (
+                            "IMPORTANT: The previous question was too similar to recent questions. "
+                            "Generate a DIFFERENT question with a fresh angle or perspective."
+                        )
 
-        # Fallback to templates
-        question = self._generate_from_template(opportunity, graph)
-        question = self._post_process_question(question)
+                    question = await self._generate_with_llm(
+                        opportunity, graph, conversation_history, anti_repetition_context
+                    )
+                    if question:
+                        question = self._post_process_question(question)
+                except Exception as e:
+                    logger.warning(f"LLM question generation failed: {e}. Using templates.")
+
+            # Fallback to templates if LLM didn't produce a question
+            if not question:
+                question = self._generate_from_template(opportunity, graph)
+                question = self._post_process_question(question)
+
+            # Check for repetition if deduplication enabled
+            if self.deduplicator and self._question_history:
+                is_repetitive, reason, similarity = self.deduplicator.is_repetitive(
+                    question, self._question_history
+                )
+
+                if is_repetitive:
+                    logger.info(
+                        f"Attempt {attempt + 1}: Question repetitive ({reason}, "
+                        f"similarity={similarity:.2f}). Regenerating..."
+                    )
+                    # If this is the last attempt, add variety phrase
+                    if attempt == self.max_regeneration_attempts - 1:
+                        question = self._add_variety_phrase(question)
+                        logger.info("Max attempts reached. Adding variety phrase to force uniqueness.")
+                        break
+                    # Otherwise, continue to next attempt
+                    continue
+
+            # Question is not repetitive (or deduplication disabled), use it
+            break
+
+        # Add to history and return
         self._question_history.append(question)
         return question
 
@@ -105,14 +165,30 @@ class QuestionGenerator:
         opportunity: RankedOpportunity,
         graph: InterviewGraph,
         conversation_history: list[dict[str, str]],
+        anti_repetition_context: str | None = None,
     ) -> str | None:
-        """Generate question using LLM."""
+        """
+        Generate question using LLM.
+
+        Args:
+            opportunity: Ranked opportunity to explore
+            graph: Current interview graph
+            conversation_history: Recent conversation for context
+            anti_repetition_context: Optional instruction to avoid repetition
+
+        Returns:
+            Optional[str]: Generated question or None if failed
+        """
         if not self.llm:
             return None
 
         # Build prompt
         llm_config = self._templates.get("llm_question_generation", {})
         system_prompt = llm_config.get("system_prompt", "")
+
+        # Add anti-repetition instruction if provided
+        if anti_repetition_context:
+            system_prompt = f"{system_prompt}\n\n{anti_repetition_context}"
 
         # Format user prompt
         user_template = llm_config.get("user_prompt_template", "")
@@ -123,9 +199,9 @@ class QuestionGenerator:
         # Format target info
         target_info = f"{opportunity.node_label} ({opportunity.node_type})"
 
-        # Format recent conversation
+        # Format recent conversation (expanded from 3 to 6 turns)
         recent_conv = "\n".join(
-            f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history[-3:]
+            f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history[-6:]
         )
 
         last_question = (
@@ -255,6 +331,32 @@ class QuestionGenerator:
             question = question[0].upper() + question[1:]
 
         return question
+
+    def _add_variety_phrase(self, question: str) -> str:
+        """
+        Add variety phrase to make question unique when max attempts reached.
+
+        Args:
+            question: Base question
+
+        Returns:
+            str: Question with variety phrase prepended
+        """
+        variety_phrases = [
+            "Building on that, ",
+            "Following up, ",
+            "I'm curious, ",
+            "Let me ask differently: ",
+            "From another angle, ",
+            "Taking a step back, ",
+        ]
+
+        phrase = random.choice(variety_phrases)
+        # Lowercase first letter of question when prepending
+        if question:
+            question = question[0].lower() + question[1:]
+
+        return phrase + question
 
     def get_opening_question(self) -> str:
         """Get opening question to start interview."""

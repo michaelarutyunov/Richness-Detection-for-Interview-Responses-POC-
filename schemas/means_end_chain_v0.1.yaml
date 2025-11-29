@@ -75,6 +75,7 @@ node_types:
 
 # Edge Types
 edge_types:
+  # Upward relationships (means-end chain)
   - name: "leads_to"
     description: "A causes or enables B in the value chain"
     valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
@@ -86,6 +87,26 @@ edge_types:
     valid_sources: ["attribute", "functional_consequence"]
     valid_targets: ["psychosocial_consequence", "value"]
     richness_boost: 2.0  # Reveals deep barriers - very valuable
+
+  # Same-level relationships (lateral connections)
+  - name: "correlates_with"
+    description: "A is associated with or related to B (same abstraction level)"
+    valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    valid_targets: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    richness_boost: 0.5  # Useful connections but less theoretically important
+
+  - name: "enables"
+    description: "A makes B possible or easier (same level or one step up)"
+    valid_sources: ["attribute", "functional_consequence"]
+    valid_targets: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    richness_boost: 0.75  # Practical enablement relationships
+
+  # Downward relationships (specificity)
+  - name: "exemplifies"
+    description: "A is a specific example or instance of B (downward relationship)"
+    valid_sources: ["functional_consequence", "psychosocial_consequence", "attribute"]
+    valid_targets: ["attribute", "functional_consequence", "psychosocial_consequence"]
+    richness_boost: 0.3  # Elaboration but not upward movement
 
 # Seed Nodes (starting concepts to ensure coverage)
 seed_nodes:

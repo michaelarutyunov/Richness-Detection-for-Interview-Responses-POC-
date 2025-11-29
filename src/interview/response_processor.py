@@ -3,10 +3,11 @@ Response Processor for extracting graph deltas from participant responses.
 
 Orchestrates the extraction pipeline:
 1. Build extraction prompt
-2. Call LLM with retry
+2. Call LLM with retry (Stage 1: Explicit extraction)
 3. Parse function call result
-4. Validate against schema
-5. Build GraphDelta with metadata
+4. Enhance with implicit relationships (Stage 2: RelationshipExtractor)
+5. Validate against schema
+6. Build GraphDelta with metadata
 """
 
 import logging
@@ -14,6 +15,7 @@ import logging
 from src.core.data_models import Edge, GraphDelta, Node
 from src.core.interview_graph import InterviewGraph
 from src.interview.prompt_builder import PromptBuilder
+from src.interview.relationship_extractor import RelationshipExtractor
 from src.interview.validator import Validator
 from src.llm.base_client import BaseLLMClient
 from src.llm.exceptions import LLMProviderError
@@ -29,6 +31,7 @@ class ResponseProcessor:
         llm_client: BaseLLMClient,
         prompt_builder: PromptBuilder,
         validator: Validator,
+        relationship_extractor: RelationshipExtractor | None = None,
     ):
         """
         Initialize response processor.
@@ -37,10 +40,12 @@ class ResponseProcessor:
             llm_client: LLM client for extraction
             prompt_builder: Builds prompts from templates
             validator: Validates LLM output against schema
+            relationship_extractor: Optional extractor for implicit relationships
         """
         self.llm = llm_client
         self.prompt_builder = prompt_builder
         self.validator = validator
+        self.relationship_extractor = relationship_extractor
 
     async def process_response(
         self,
@@ -112,6 +117,39 @@ class ResponseProcessor:
             )
 
         raw_extraction = llm_response.function_call
+
+        # Stage 3.5: Enhance with implicit relationships (if enabled)
+        if self.relationship_extractor:
+            try:
+                logger.debug("Running Stage 2: Implicit relationship extraction")
+                inferred_edges = self.relationship_extractor.enhance_extraction(
+                    participant_response=participant_response,
+                    extracted_nodes=raw_extraction.get("nodes_added", []),
+                    extracted_edges=raw_extraction.get("edges_added", []),
+                    existing_graph=existing_graph,
+                )
+
+                if inferred_edges:
+                    # Add inferred edges to raw extraction
+                    raw_extraction["edges_added"] = raw_extraction.get("edges_added", [])
+                    raw_extraction["edges_added"].extend(
+                        [
+                            {
+                                "type": edge.type,
+                                "source": edge.source,
+                                "target": edge.target,
+                                "quote": edge.quote,
+                                "confidence": edge.confidence,
+                            }
+                            for edge in inferred_edges
+                        ]
+                    )
+                    logger.info(
+                        f"Added {len(inferred_edges)} inferred edges to extraction"
+                    )
+            except Exception as e:
+                logger.error(f"Error in implicit relationship extraction: {e}", exc_info=True)
+                # Continue with original extraction
 
         # Stage 4: Validate
         validation_result = self.validator.validate(
@@ -234,6 +272,7 @@ class ResponseProcessor:
                 target=target_id,
                 source_quote=extracted.quote,
                 creation_turn=turn_number,
+                confidence=extracted.confidence,
             )
             edges.append(edge)
 
