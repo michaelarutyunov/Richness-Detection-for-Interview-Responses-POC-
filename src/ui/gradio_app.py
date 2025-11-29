@@ -231,29 +231,30 @@ class InterviewSession:
 
         return "\n".join(lines)
 
-    def get_node_table(self) -> list[dict]:
-        """Get node data as table rows."""
+    def get_node_table(self) -> list[list]:
+        """Get node data as table rows (list[list] format for Gradio 6.x)."""
         if not self.manager:
             return []
 
         rows = []
         for node_id in self.manager.graph.graph.nodes():
             node_data = self.manager.graph.graph.nodes[node_id]["data"]
+            # Return list in same order as headers: ID, Type, Label, Quotes, Visit Count, Turn
             rows.append(
-                {
-                    "ID": node_data.id,
-                    "Type": node_data.type,
-                    "Label": node_data.label,
-                    "Quotes": "; ".join(node_data.source_quotes[:2]),
-                    "Visit Count": node_data.visit_count,
-                    "Turn": node_data.creation_turn,
-                }
+                [
+                    node_data.id,
+                    node_data.type,
+                    node_data.label,
+                    "; ".join(node_data.source_quotes[:2]),
+                    node_data.visit_count,
+                    node_data.creation_turn,
+                ]
             )
 
         return rows
 
-    def get_edge_table(self) -> list[dict]:
-        """Get edge data as table rows."""
+    def get_edge_table(self) -> list[list]:
+        """Get edge data as table rows (list[list] format for Gradio 6.x)."""
         if not self.manager:
             return []
 
@@ -263,15 +264,16 @@ class InterviewSession:
             quote = (
                 edge.source_quote[:50] + "..." if len(edge.source_quote) > 50 else edge.source_quote
             )
+            # Return list in same order as headers: ID, Type, Source, Target, Quote, Turn
             rows.append(
-                {
-                    "ID": edge.id,
-                    "Type": edge.type,
-                    "Source": edge.source,
-                    "Target": edge.target,
-                    "Quote": quote,
-                    "Turn": edge.creation_turn,
-                }
+                [
+                    edge.id,
+                    edge.type,
+                    edge.source,
+                    edge.target,
+                    quote,
+                    edge.creation_turn,
+                ]
             )
 
         return rows
@@ -288,6 +290,22 @@ class InterviewSession:
             )
 
         return create_plotly_graph(self.manager.graph)
+
+    def export_extended_report(self) -> str:
+        """Export extended Markdown report."""
+        if not self.manager:
+            return "# No Interview Data\n\nNo interview has been conducted yet."
+
+        from src.reporting.report_generator import ReportGenerator
+
+        report = ReportGenerator.generate_markdown_report(
+            session_id=self.session_id,
+            concept_description=self.concept_description,
+            turn_logs=self.manager.get_turn_logs(),
+            final_graph_stats=self.get_stats(),
+        )
+
+        return report
 
 
 class InterviewUI:
@@ -401,67 +419,123 @@ class InterviewUI:
 
         return fig, nodes_table, edges_table
 
-    def export_graphml_file(self):
+    async def export_graphml_file(self):
         """Export GraphML file for download."""
-        if not self.current_session or not self.current_session.manager:
+        try:
+            if not self.current_session or not self.current_session.manager:
+                logger.warning("Export attempted with no active session")
+                return None
+
+            logger.info(f"Exporting GraphML for session {self.current_session.session_id}")
+
+            import tempfile
+
+            graphml_bytes = self.current_session.export_graphml()
+
+            # Write to temp file for Gradio File component
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="wb",
+                suffix=".graphml",
+                delete=False,
+                prefix=f"interview_{self.current_session.session_id}_",
+            )
+            temp_file.write(graphml_bytes)
+            temp_file.close()
+
+            logger.info(f"GraphML export successful: {temp_file.name}")
+            return temp_file.name
+
+        except Exception as e:
+            logger.error(f"GraphML export failed: {e}")
             return None
 
-        import tempfile
-
-        graphml_bytes = self.current_session.export_graphml()
-
-        # Write to temp file for Gradio File component
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="wb",
-            suffix=".graphml",
-            delete=False,
-            prefix=f"interview_{self.current_session.session_id}_",
-        )
-        temp_file.write(graphml_bytes)
-        temp_file.close()
-
-        return temp_file.name
-
-    def export_json_file(self):
+    async def export_json_file(self):
         """Export JSON file for download."""
-        if not self.current_session or not self.current_session.manager:
+        try:
+            if not self.current_session or not self.current_session.manager:
+                logger.warning("JSON export attempted with no active session")
+                return None
+
+            logger.info(f"Exporting JSON for session {self.current_session.session_id}")
+
+            import json
+            import tempfile
+
+            json_data = self.current_session.export_json()
+
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".json",
+                delete=False,
+                prefix=f"interview_{self.current_session.session_id}_",
+            )
+            json.dump(json_data, temp_file, indent=2)
+            temp_file.close()
+
+            logger.info(f"JSON export successful: {temp_file.name}")
+            return temp_file.name
+
+        except Exception as e:
+            logger.error(f"JSON export failed: {e}")
             return None
 
-        import json
-        import tempfile
-
-        json_data = self.current_session.export_json()
-
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".json",
-            delete=False,
-            prefix=f"interview_{self.current_session.session_id}_",
-        )
-        json.dump(json_data, temp_file, indent=2)
-        temp_file.close()
-
-        return temp_file.name
-
-    def export_transcript_file(self):
+    async def export_transcript_file(self):
         """Export transcript file for download."""
-        if not self.current_session or not self.current_session.manager:
+        try:
+            if not self.current_session or not self.current_session.manager:
+                logger.warning("Transcript export attempted with no active session")
+                return None
+
+            logger.info(f"Exporting transcript for session {self.current_session.session_id}")
+
+            import tempfile
+
+            transcript_text = self.current_session.export_transcript()
+
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".txt",
+                delete=False,
+                prefix=f"transcript_{self.current_session.session_id}_",
+            )
+            temp_file.write(transcript_text)
+            temp_file.close()
+
+            logger.info(f"Transcript export successful: {temp_file.name}")
+            return temp_file.name
+
+        except Exception as e:
+            logger.error(f"Transcript export failed: {e}")
             return None
 
-        import tempfile
+    async def export_extended_report_file(self):
+        """Export extended report file for download."""
+        try:
+            if not self.current_session or not self.current_session.manager:
+                logger.warning("Extended report export attempted with no active session")
+                return None
 
-        transcript_text = self.current_session.export_transcript()
+            logger.info(f"Exporting extended report for session {self.current_session.session_id}")
 
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".txt",
-            delete=False,
-            prefix=f"transcript_{self.current_session.session_id}_",
-        )
-        temp_file.write(transcript_text)
-        temp_file.close()
+            import tempfile
 
-        return temp_file.name
+            report_markdown = self.current_session.export_extended_report()
+
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".md",
+                delete=False,
+                prefix=f"extended_report_{self.current_session.session_id}_",
+            )
+            temp_file.write(report_markdown)
+            temp_file.close()
+
+            logger.info(f"Extended report export successful: {temp_file.name}")
+            return temp_file.name
+
+        except Exception as e:
+            logger.error(f"Extended report export failed: {e}")
+            return None
 
     def build_interface(self) -> gr.Blocks:
         """Build the Gradio interface."""
@@ -562,6 +636,41 @@ class InterviewUI:
                 # Tab 2: Graph Visualization
                 with gr.TabItem("📊 Graph Visualization"):
                     gr.Markdown("### Interactive Knowledge Graph")
+
+                    # Interpretation guide
+                    with gr.Accordion("ℹ️ How to Interpret the Graph", open=False):
+                        gr.Markdown(
+                            """
+                            **Node Colors** (by type):
+                            - 🔵 Blue = Attributes (product features mentioned)
+                            - 🟢 Green = Functional Consequences (what the product does/enables)
+                            - 🟣 Purple = Psychosocial Consequences (how it makes you feel)
+                            - 🔴 Red = Terminal Values (end goals, life values)
+                            - 🟠 Orange = Instrumental Values
+
+                            **Node Size:**
+                            - Larger nodes = higher richness weight OR more visits during interview
+                            - Base size = richness weight × 10
+                            - Visit bonus = visit count × 5
+
+                            **Edges (Connections):**
+                            - Lines between nodes show causal relationships
+                            - Direction matters: A → B means "A leads to B"
+                            - Edge types: leads_to, enables, fulfills, etc.
+
+                            **Disconnected Nodes:**
+                            If you see many nodes without connections, it may indicate:
+                            1. The conversation didn't explore deeper "why" questions
+                            2. Responses mentioned features but not their benefits/consequences
+                            3. Edge extraction needs improvement (technical issue)
+
+                            **How to Get Better Graphs:**
+                            - Explain *why* features matter to you, not just what they are
+                            - Describe consequences and benefits
+                            - Answer "what does that enable?" and "why is that important?"
+                            """
+                        )
+
                     graph_plot = gr.Plot(label="Graph Structure")
 
                     with gr.Row():
@@ -603,7 +712,7 @@ class InterviewUI:
                             )
                             graphml_file = gr.File(
                                 label="GraphML File (for Gephi, yEd, Cytoscape)",
-                                visible=False,
+                                visible=True,
                             )
 
                             export_json_btn = gr.Button(
@@ -613,7 +722,7 @@ class InterviewUI:
                             )
                             json_file = gr.File(
                                 label="JSON File (raw graph data)",
-                                visible=False,
+                                visible=True,
                             )
 
                         with gr.Column():
@@ -625,7 +734,18 @@ class InterviewUI:
                             )
                             transcript_file = gr.File(
                                 label="Transcript File (text)",
-                                visible=False,
+                                visible=True,
+                            )
+
+                            # NEW: Extended report button
+                            export_extended_report_btn = gr.Button(
+                                "📥 Download Extended Report (Markdown)",
+                                variant="primary",  # Primary = recommended option
+                                size="lg",
+                            )
+                            extended_report_file = gr.File(
+                                label="Extended Report (Markdown with turn-by-turn breakdown)",
+                                visible=True,
                             )
 
             # Event handlers
@@ -677,6 +797,11 @@ class InterviewUI:
             export_transcript_btn.click(
                 fn=self.export_transcript_file,
                 outputs=[transcript_file],
+            )
+
+            export_extended_report_btn.click(
+                fn=self.export_extended_report_file,
+                outputs=[extended_report_file],
             )
 
         return app
