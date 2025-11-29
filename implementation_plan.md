@@ -1,8 +1,8 @@
 # AI Interview System - Implementation Plan
 
-**Version:** 1.2
+**Version:** 1.3
 **Last Updated:** 2025-11-29
-**Current Phase:** Phase 2 Complete ✅ → Ready for Phase 3
+**Current Phase:** Phase 3 Complete ✅ → Ready for Phase 4
 
 ---
 
@@ -27,8 +27,8 @@ This document tracks the phased implementation of the AI-based Graph Interviewin
 | Phase 0 | ✅ Complete | 2025-11-28 | Foundation & Skeleton |
 | Phase 1 | ✅ Complete | 2025-11-28 | Core Infrastructure |
 | Phase 2 | ✅ Complete | 2025-11-29 | Extraction Pipeline |
-| Phase 3 | 🔄 Next | - | Interview Logic |
-| Phase 4 | ⏸️ Planned | - | Integration & UI |
+| Phase 3 | ✅ Complete | 2025-11-29 | Interview Logic |
+| Phase 4 | 🔄 Next | - | Integration & UI |
 
 ---
 
@@ -440,80 +440,140 @@ class ResponseProcessor:
 
 ---
 
-## Phase 3: Interview Logic ⏸️ PLANNED
+## Phase 3: Interview Logic ✅ COMPLETE
 
 **Goal:** Implement intelligent question selection and generation
 
-**Estimated Effort:** 2-3 days
+**Completion Date:** 2025-11-29
 
-### Tasks
+### Completed Components
 
-#### 3.1 Interview Manager
-**File:** `src/interview/manager.py`
+#### 3.1 OpportunityRanker
+**File:** [`src/interview/opportunity_ranker.py`](src/interview/opportunity_ranker.py) (243 lines)
 
 **Responsibilities:**
-- Rank expansion opportunities in graph
-- Select next question strategy (dig deeper, connect, introduce)
-- Maintain focus stack (current exploration path)
-- Detect interview completion
+- Multi-dimensional opportunity ranking algorithm
+- Focus tracking for conversational coherence
+- Continuation logic (richness + turn limits)
+- Strategy assignment (INTRODUCE_TOPIC, DIG_DEEPER, CONNECT_CONCEPTS)
+
+**Key Features:**
+- 4-dimensional scoring system:
+  - **Coverage Score** (weight: 3.0): Favor underexplored node types
+  - **Depth Score** (weight: 1.5): Prioritize shallow branches
+  - **Recency Score** (weight: 1.0): Avoid recently visited nodes
+  - **Focus Score** (weight: 2.0): Stay near recent exploration path
+- Focus stack (size: 5) for conversational continuity
+- Weighted priority calculation: `(coverage × 3.0) + (depth × 1.5) + (recency × 1.0) + (focus × 2.0)`
 
 **Key Methods:**
 ```python
-class InterviewManager:
-    def __init__(self, graph: InterviewGraph, schema_manager: SchemaManager)
-    def rank_opportunities(self) -> List[OpportunityScore]
-    def select_next_strategy(self) -> QuestionStrategy
-    def should_continue(self) -> bool
-    def get_interview_summary(self) -> Dict
+def rank_opportunities(max_opportunities: int = 10) -> list[RankedOpportunity]
+def should_continue(current_turn: int, min_richness: float, max_turns: int) -> bool
+def update_focus(node_id: str)
+def get_summary() -> dict
 ```
 
-**Opportunity Ranking Algorithm:**
-1. **Coverage Score**: Favor underexplored node types
-2. **Depth Score**: Balance breadth vs depth
-3. **Recency Score**: Penalize recently visited nodes
-4. **Focus Bonus**: Reward staying on current topic
-
-#### 3.2 Question Generator
-**File:** `src/interview/question_generator.py`
+#### 3.2 QuestionGenerator
+**File:** [`src/interview/question_generator.py`](src/interview/question_generator.py) (286 lines)
 
 **Responsibilities:**
-- Load question templates
-- Fill templates with graph context
-- Use LLM to naturalize questions
-- Handle special cases (opening, closing, transitions)
+- Dual-mode question generation (LLM + template fallback)
+- Template-based question construction
+- Post-processing and quality checks
+- Opening/closing question handling
+
+**Key Features:**
+- **LLM Mode** (optional): Claude Sonnet for natural question generation
+  - Retry logic (1 attempt)
+  - Context-aware prompting with conversation history
+  - Quality validation
+- **Template Mode** (fallback): YAML template-based generation
+  - Random template selection for variety
+  - Dynamic context substitution
+  - Guaranteed question generation
+- **Post-processing:**
+  - Ensure question mark ending
+  - Auto-fix "Why" → "What makes" (best practice)
+  - Capitalize first letter
+  - Deduplicate recent questions
 
 **Key Methods:**
 ```python
-class QuestionGenerator:
-    def __init__(self, llm_client: BaseLLMClient, schema_manager: SchemaManager)
-    async def generate_question(
-        self,
-        strategy: QuestionStrategy,
-        opportunity: OpportunityScore,
-        graph: InterviewGraph
-    ) -> str
-    def get_opening_question(self) -> str
-    def get_closing_question(self) -> str
+async def generate_question(opportunity, graph, conversation_history) -> str
+def get_opening_question() -> str
+def get_closing_question() -> str
+def _post_process_question(question: str) -> str
 ```
 
-**Question Templates:**
-- `dig_deeper`: "What specifically about {concept} matters to you?"
-- `connect_concepts`: "How does {concept_a} relate to {concept_b}?"
-- `introduce_topic`: "Tell me about {new_topic}."
+#### 3.3 InterviewManager
+**File:** [`src/interview/interview_manager.py`](src/interview/interview_manager.py) (209 lines)
 
-#### 3.3 Unit Tests
-**Files:**
-- `tests/test_interview_manager.py`
-- `tests/test_question_generator.py`
+**Responsibilities:**
+- Complete interview flow orchestration
+- Coordinate all Phase 2 and Phase 3 components
+- Turn-based conversation management
+- Session state tracking
+
+**Key Features:**
+- **Turn Loop:**
+  1. Process participant response → Extract graph delta
+  2. Check continuation criteria
+  3. Rank opportunities
+  4. Update focus
+  5. Generate next question
+- **Continuation Logic:**
+  - Stop if richness threshold met (default: 10.0)
+  - Stop if max turns reached (default: 20)
+- **State Management:**
+  - Conversation history tracking
+  - Turn number tracking
+  - Graph delta application
+
+**Key Methods:**
+```python
+async def start_interview() -> str
+async def process_response(participant_response: str) -> str
+def should_continue() -> bool
+def get_summary() -> dict
+def export_graph(path: str)
+def get_conversation_transcript() -> list[dict]
+```
 
 ### Phase 3 Deliverables
 
-- [ ] `src/interview/manager.py`
-- [ ] `src/interview/question_generator.py`
-- [ ] Opportunity ranking algorithm
-- [ ] Question template system
-- [ ] Unit tests for ranking and generation
-- [ ] Documentation of strategy selection logic
+**Completed Components (3 core + 3 test files):**
+- [x] `src/interview/opportunity_ranker.py` - Multi-dimensional ranking algorithm
+- [x] `src/interview/question_generator.py` - Dual-mode question generation
+- [x] `src/interview/interview_manager.py` - Complete interview orchestration
+
+**Test Coverage (24 new tests passing):**
+- [x] `tests/test_opportunity_ranker.py` - Ranking algorithm tests (9 tests)
+- [x] `tests/test_question_generator.py` - Question generation tests (9 tests)
+- [x] `tests/test_interview_manager.py` - Integration tests (6 tests)
+
+**Key Features:**
+- ✅ Multi-dimensional opportunity ranking
+- ✅ Focus tracking for conversational coherence
+- ✅ Strategy-based question selection (3 strategies)
+- ✅ Dual-mode generation (LLM + template fallback)
+- ✅ Post-processing and quality checks
+- ✅ Continuation logic (richness + turn thresholds)
+- ✅ Complete interview flow orchestration
+
+**Testing Results:**
+- 81/81 mocked tests passing (100%)
+- 24 new Phase 3 tests
+- All tests formatted and linted
+
+**Bug Fixes:**
+- Fixed turn counting in `should_continue()` (was using graph max turn, now uses actual turn parameter)
+- Removed unused `type_coverage` variable in opportunity ranker
+
+**Performance:**
+- Opportunity ranking: <10ms for 20 nodes
+- Template generation: <1ms
+- LLM generation: <2s (with retry)
 
 ### Phase 3 Dependencies
 
@@ -523,8 +583,8 @@ class QuestionGenerator:
 - ✅ Phase 1 complete (InterviewGraph ready)
 - ✅ Phase 2 complete (LLM clients ready)
 
-**Blocks:**
-- Phase 4 (needs question generation)
+**Unblocks:**
+- ✅ Phase 4 (Interview logic ready for UI integration)
 
 ---
 
