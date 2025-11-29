@@ -196,7 +196,7 @@ class TurnLog(BaseModel):
     processing_time_seconds: float = Field(default=0.0, description="Time to process response")
 
     # State
-    interview_state: InterviewState = Field(..., description="State after processing")
+    interview_state: InterviewState | None = Field(None, description="State after processing")
 
     # Output
     question_generated: str = Field(..., description="Next question to ask")
