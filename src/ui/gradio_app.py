@@ -135,10 +135,159 @@ class InterviewSession:
             return False
         return not self.manager.should_continue()
 
-    def export_graph(self, path: str):
-        """Export interview graph."""
-        if self.manager:
-            self.manager.export_graph(path)
+    def export_graphml(self) -> bytes:
+        """Export graph as GraphML file (bytes for download)."""
+        if not self.manager:
+            return b""
+
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".graphml", delete=False) as f:
+            temp_path = f.name
+
+        try:
+            self.manager.export_graph(temp_path)
+
+            with open(temp_path, "rb") as f:
+                data = f.read()
+
+            return data
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def export_json(self) -> dict:
+        """Export graph as JSON (nodes + edges + metadata)."""
+        if not self.manager:
+            return {"nodes": [], "edges": [], "metadata": {}}
+
+        nodes = []
+        for node_id in self.manager.graph.graph.nodes():
+            node_data = self.manager.graph.graph.nodes[node_id]["data"]
+            nodes.append(
+                {
+                    "id": node_data.id,
+                    "type": node_data.type,
+                    "label": node_data.label,
+                    "source_quotes": node_data.source_quotes,
+                    "creation_turn": node_data.creation_turn,
+                    "visit_count": node_data.visit_count,
+                }
+            )
+
+        edges = []
+        for _, _, edge_data in self.manager.graph.graph.edges(data=True):
+            edge = edge_data["data"]
+            edges.append(
+                {
+                    "id": edge.id,
+                    "type": edge.type,
+                    "source": edge.source,
+                    "target": edge.target,
+                    "source_quote": edge.source_quote,
+                    "creation_turn": edge.creation_turn,
+                }
+            )
+
+        metadata = {
+            "session_id": self.session_id,
+            "concept_description": self.concept_description,
+            "turns": self.manager.turn_number if self.manager else 0,
+            "richness": self.manager.graph.calculate_richness() if self.manager else 0.0,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+        }
+
+        return {"nodes": nodes, "edges": edges, "metadata": metadata}
+
+    def export_transcript(self) -> str:
+        """Export conversation transcript as formatted text."""
+        if not self.manager:
+            return "No conversation yet."
+
+        transcript = self.manager.get_conversation_transcript()
+
+        lines = [
+            "# Interview Transcript",
+            f"Session ID: {self.session_id}",
+            f"Concept: {self.concept_description}",
+            f"Date: {self.session_id[:8]}",
+            "",
+            "=" * 60,
+            "",
+        ]
+
+        for msg in transcript:
+            role = "Interviewer" if msg["role"] == "assistant" else "Participant"
+            lines.append(f"[{role}]")
+            lines.append(msg["content"])
+            lines.append("")
+
+        lines.append("=" * 60)
+        lines.append(f"Total turns: {self.manager.turn_number}")
+        lines.append(f"Nodes extracted: {self.manager.graph.node_count}")
+        lines.append(f"Edges extracted: {self.manager.graph.edge_count}")
+        lines.append(f"Final richness: {self.manager.graph.calculate_richness():.2f}")
+
+        return "\n".join(lines)
+
+    def get_node_table(self) -> list[dict]:
+        """Get node data as table rows."""
+        if not self.manager:
+            return []
+
+        rows = []
+        for node_id in self.manager.graph.graph.nodes():
+            node_data = self.manager.graph.graph.nodes[node_id]["data"]
+            rows.append(
+                {
+                    "ID": node_data.id,
+                    "Type": node_data.type,
+                    "Label": node_data.label,
+                    "Quotes": "; ".join(node_data.source_quotes[:2]),
+                    "Visit Count": node_data.visit_count,
+                    "Turn": node_data.creation_turn,
+                }
+            )
+
+        return rows
+
+    def get_edge_table(self) -> list[dict]:
+        """Get edge data as table rows."""
+        if not self.manager:
+            return []
+
+        rows = []
+        for _, _, edge_data in self.manager.graph.graph.edges(data=True):
+            edge = edge_data["data"]
+            quote = (
+                edge.source_quote[:50] + "..." if len(edge.source_quote) > 50 else edge.source_quote
+            )
+            rows.append(
+                {
+                    "ID": edge.id,
+                    "Type": edge.type,
+                    "Source": edge.source,
+                    "Target": edge.target,
+                    "Quote": quote,
+                    "Turn": edge.creation_turn,
+                }
+            )
+
+        return rows
+
+    def visualize_graph(self):
+        """Create Plotly visualization of graph."""
+        import plotly.graph_objects as go
+
+        from src.ui.graph_visualizer import create_plotly_graph
+
+        if not self.manager:
+            return go.Figure().add_annotation(
+                text="No interview started yet", showarrow=False, font={"size": 20}
+            )
+
+        return create_plotly_graph(self.manager.graph)
 
 
 class InterviewUI:
@@ -233,6 +382,87 @@ class InterviewUI:
             history.append({"role": "assistant", "content": error_msg})
             return history, "", self.current_session.get_stats(), self.current_session.session_id
 
+    def refresh_visualization(self):
+        """Refresh graph visualization and tables."""
+        import plotly.graph_objects as go
+
+        if not self.current_session or not self.current_session.manager:
+            empty_fig = go.Figure().add_annotation(
+                text="Start an interview to see the graph", showarrow=False, font={"size": 16}
+            )
+            return empty_fig, [], []
+
+        # Get visualization
+        fig = self.current_session.visualize_graph()
+
+        # Get tables
+        nodes_table = self.current_session.get_node_table()
+        edges_table = self.current_session.get_edge_table()
+
+        return fig, nodes_table, edges_table
+
+    def export_graphml_file(self):
+        """Export GraphML file for download."""
+        if not self.current_session or not self.current_session.manager:
+            return None
+
+        import tempfile
+
+        graphml_bytes = self.current_session.export_graphml()
+
+        # Write to temp file for Gradio File component
+        temp_file = tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=".graphml",
+            delete=False,
+            prefix=f"interview_{self.current_session.session_id}_",
+        )
+        temp_file.write(graphml_bytes)
+        temp_file.close()
+
+        return temp_file.name
+
+    def export_json_file(self):
+        """Export JSON file for download."""
+        if not self.current_session or not self.current_session.manager:
+            return None
+
+        import json
+        import tempfile
+
+        json_data = self.current_session.export_json()
+
+        temp_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            delete=False,
+            prefix=f"interview_{self.current_session.session_id}_",
+        )
+        json.dump(json_data, temp_file, indent=2)
+        temp_file.close()
+
+        return temp_file.name
+
+    def export_transcript_file(self):
+        """Export transcript file for download."""
+        if not self.current_session or not self.current_session.manager:
+            return None
+
+        import tempfile
+
+        transcript_text = self.current_session.export_transcript()
+
+        temp_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".txt",
+            delete=False,
+            prefix=f"transcript_{self.current_session.session_id}_",
+        )
+        temp_file.write(transcript_text)
+        temp_file.close()
+
+        return temp_file.name
+
     def build_interface(self) -> gr.Blocks:
         """Build the Gradio interface."""
         with gr.Blocks(title="AI Interview Assistant") as app:
@@ -258,69 +488,145 @@ class InterviewUI:
                     )
                     start_btn = gr.Button("Start Interview", variant="primary", size="lg")
 
-            with gr.Row():
-                # Left column: Chat interface
-                with gr.Column(scale=2):
-                    chatbot = gr.Chatbot(
-                        label="Interview Conversation",
-                        height=500,
-                    )
-
+            # Main interface with tabs
+            with gr.Tabs():
+                # Tab 1: Interview Chat
+                with gr.TabItem("💬 Interview"):
                     with gr.Row():
-                        user_input = gr.Textbox(
-                            label="Your Response",
-                            placeholder="Type your answer here and press Submit...",
-                            lines=3,
-                            max_lines=5,
-                            show_label=False,
+                        # Left column: Chat interface
+                        with gr.Column(scale=2):
+                            chatbot = gr.Chatbot(
+                                label="Interview Conversation",
+                                height=500,
+                            )
+
+                            with gr.Row():
+                                user_input = gr.Textbox(
+                                    label="Your Response",
+                                    placeholder="Type your answer here and press Submit...",
+                                    lines=3,
+                                    max_lines=5,
+                                    show_label=False,
+                                )
+
+                            with gr.Row():
+                                submit_btn = gr.Button("Submit", variant="primary", size="lg")
+                                clear_btn = gr.Button("Clear & Restart", size="lg")
+
+                        # Right column: Interview metadata & stats
+                        with gr.Column(scale=1):
+                            gr.Markdown("### Interview Progress")
+
+                            session_id_display = gr.Textbox(
+                                label="Session ID",
+                                value="Not started",
+                                interactive=False,
+                                max_lines=1,
+                            )
+
+                            gr.Markdown("### Knowledge Graph Stats")
+                            graph_stats = gr.JSON(
+                                label="Current Graph",
+                                value={
+                                    "nodes": 0,
+                                    "edges": 0,
+                                    "coverage": "0%",
+                                    "richness": 0.0,
+                                    "turns": 0,
+                                },
+                            )
+
+                    # Instructions
+                    with gr.Accordion("ℹ️ How to use", open=False):
+                        gr.Markdown(
+                            """
+                            **Instructions:**
+                            1. Describe the product/concept you want to explore in the text box above
+                            2. Click **Start Interview** to begin
+                            3. Read the AI interviewer's question
+                            4. Type your response and click **Submit**
+                            5. The AI will analyze your response and ask a follow-up question
+                            6. Continue until the interview completes (typically 10-15 exchanges)
+
+                            **Tips:**
+                            - Be as detailed or brief as you like
+                            - There are no right or wrong answers
+                            - The AI adapts its questions based on your responses
+                            - Watch the Knowledge Graph stats update in real-time!
+
+                            **Requirements:**
+                            - KIMI_API_KEY and ANTHROPIC_API_KEY must be set in .env file
+                            """
                         )
 
+                # Tab 2: Graph Visualization
+                with gr.TabItem("📊 Graph Visualization"):
+                    gr.Markdown("### Interactive Knowledge Graph")
+                    graph_plot = gr.Plot(label="Graph Structure")
+
                     with gr.Row():
-                        submit_btn = gr.Button("Submit", variant="primary", size="lg")
-                        clear_btn = gr.Button("Clear & Restart", size="lg")
+                        refresh_viz_btn = gr.Button("🔄 Refresh Visualization", size="sm")
 
-                # Right column: Interview metadata & stats
-                with gr.Column(scale=1):
-                    gr.Markdown("### Interview Progress")
+                    gr.Markdown("### Graph Data Tables")
 
-                    session_id_display = gr.Textbox(
-                        label="Session ID", value="Not started", interactive=False, max_lines=1
+                    with gr.Row():
+                        with gr.Column():
+                            gr.Markdown("**Nodes**")
+                            nodes_table = gr.Dataframe(
+                                headers=["ID", "Type", "Label", "Quotes", "Visit Count", "Turn"],
+                                interactive=False,
+                            )
+
+                        with gr.Column():
+                            gr.Markdown("**Edges**")
+                            edges_table = gr.Dataframe(
+                                headers=["ID", "Type", "Source", "Target", "Quote", "Turn"],
+                                interactive=False,
+                            )
+
+                # Tab 3: Export
+                with gr.TabItem("💾 Export"):
+                    gr.Markdown(
+                        """
+                        ### Export Interview Results
+                        Download graph data and conversation transcript in various formats.
+                        """
                     )
 
-                    gr.Markdown("### Knowledge Graph Stats")
-                    graph_stats = gr.JSON(
-                        label="Current Graph",
-                        value={
-                            "nodes": 0,
-                            "edges": 0,
-                            "coverage": "0%",
-                            "richness": 0.0,
-                            "turns": 0,
-                        },
-                    )
+                    with gr.Row():
+                        with gr.Column():
+                            gr.Markdown("**Graph Formats**")
+                            export_graphml_btn = gr.Button(
+                                "📥 Download GraphML",
+                                variant="secondary",
+                                size="lg",
+                            )
+                            graphml_file = gr.File(
+                                label="GraphML File (for Gephi, yEd, Cytoscape)",
+                                visible=False,
+                            )
 
-            # Instructions
-            with gr.Accordion("ℹ️ How to use", open=False):
-                gr.Markdown(
-                    """
-                    **Instructions:**
-                    1. Describe the product/concept you want to explore in the text box above
-                    2. Click **Start Interview** to begin
-                    3. Read the AI interviewer's question
-                    4. Type your response and click **Submit**
-                    5. The AI will analyze your response and ask a follow-up question
-                    6. Continue until the interview completes (typically 10-15 exchanges)
+                            export_json_btn = gr.Button(
+                                "📥 Download JSON",
+                                variant="secondary",
+                                size="lg",
+                            )
+                            json_file = gr.File(
+                                label="JSON File (raw graph data)",
+                                visible=False,
+                            )
 
-                    **Tips:**
-                    - Be as detailed or brief as you like
-                    - There are no right or wrong answers
-                    - The AI adapts its questions based on your responses
-                    - Watch the Knowledge Graph stats update in real-time!
-
-                    **Requirements:**
-                    - KIMI_API_KEY and ANTHROPIC_API_KEY must be set in .env file
-                    """
-                )
+                        with gr.Column():
+                            gr.Markdown("**Conversation**")
+                            export_transcript_btn = gr.Button(
+                                "📥 Download Transcript",
+                                variant="secondary",
+                                size="lg",
+                            )
+                            transcript_file = gr.File(
+                                label="Transcript File (text)",
+                                visible=False,
+                            )
 
             # Event handlers
             start_btn.click(
@@ -349,6 +655,28 @@ class InterviewUI:
                     "Not started",
                 ),
                 outputs=[chatbot, user_input, graph_stats, session_id_display],
+            )
+
+            # Visualization handlers
+            refresh_viz_btn.click(
+                fn=self.refresh_visualization,
+                outputs=[graph_plot, nodes_table, edges_table],
+            )
+
+            # Export handlers
+            export_graphml_btn.click(
+                fn=self.export_graphml_file,
+                outputs=[graphml_file],
+            )
+
+            export_json_btn.click(
+                fn=self.export_json_file,
+                outputs=[json_file],
+            )
+
+            export_transcript_btn.click(
+                fn=self.export_transcript_file,
+                outputs=[transcript_file],
             )
 
         return app
