@@ -86,6 +86,7 @@ class InterviewManager:
 
         self._interview_started = True
         self._start_time = datetime.now()
+        self.session_id = self._start_time.strftime("%Y%m%d_%H%M%S")
         self.turn_number = 0
 
         opening_question = self.question_gen.get_opening_question()

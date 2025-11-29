@@ -91,6 +91,7 @@ class InterviewSession:
             min_richness=8.0,  # Lower threshold for testing
             max_turns=15,
         )
+        self.manager.session_id = self.session_id
 
         # Apply seed nodes to graph
         if delta.nodes_added:
