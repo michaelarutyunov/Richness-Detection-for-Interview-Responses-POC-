@@ -5,7 +5,9 @@ Coordinates opportunity ranking, question generation, and response processing.
 """
 
 import logging
+from datetime import datetime
 
+from src.core.data_models import QuestionMethod, TurnLog
 from src.core.interview_graph import InterviewGraph
 from src.core.schema_manager import SchemaManager
 from src.interview.opportunity_ranker import OpportunityRanker
@@ -57,10 +59,12 @@ class InterviewManager:
 
         # Interview state
         self.conversation_history = []
+        self.turn_logs = []  # Store turn-by-turn logs for extended reporting
         self.turn_number = 0
         self.min_richness = min_richness
         self.max_turns = max_turns
         self._interview_started = False
+        self.session_id = ""  # Will be set when interview starts
 
     async def start_interview(self) -> str:
         """
@@ -152,6 +156,26 @@ class InterviewManager:
         # Add to history
         self.conversation_history.append({"role": "assistant", "content": question})
 
+        # Create turn log (simplified - dummy values for timing/state)
+        turn_log = TurnLog(
+            session_id=self.session_id,
+            turn_number=self.turn_number,
+            timestamp=datetime.now(),
+            schema_version="1.0",
+            participant_response=participant_response,
+            participant_response_length=len(participant_response),
+            graph_delta=delta,
+            processing_time_seconds=0.0,  # Simplified: skip timing
+            interview_state=None,  # Simplified: skip state tracking
+            question_generated=question,
+            question_method=QuestionMethod.EXPANSION,  # Simplified: default value
+            question_generation_time_seconds=0.0,  # Simplified: skip timing
+            errors=delta.extraction_metadata.get("validation_errors", []),
+            warnings=delta.extraction_metadata.get("validation_warnings", []),
+        )
+
+        self.turn_logs.append(turn_log)
+
         return question
 
     def should_continue(self) -> bool:
@@ -202,3 +226,7 @@ class InterviewManager:
     def get_conversation_transcript(self) -> list[dict[str, str]]:
         """Get full conversation transcript."""
         return self.conversation_history.copy()
+
+    def get_turn_logs(self) -> list[TurnLog]:
+        """Get all turn logs for extended reporting."""
+        return self.turn_logs
