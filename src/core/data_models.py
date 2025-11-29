@@ -143,8 +143,8 @@ class InterviewState(BaseModel):
     avg_node_depth: float = Field(default=0.0, description="Average depth of nodes from seeds")
 
     # Interview progression
-    top_opportunity: "RankedOpportunity | None" = Field(
-        default=None, description="Highest priority opportunity"
+    top_opportunity: Any = Field(
+        default=None, description="Highest priority opportunity (RankedOpportunity)"
     )
     focus_stack: list[str] = Field(
         default_factory=list,
@@ -326,10 +326,3 @@ class LLMExtractionResponse(BaseModel):
 
     nodes_added: list[ExtractedNode] = Field(default_factory=list)
     edges_added: list[ExtractedEdge] = Field(default_factory=list)
-
-
-# Import after all models are defined to avoid circular imports
-from src.interview.opportunity_ranker import RankedOpportunity  # noqa: E402
-
-# Rebuild InterviewState to resolve forward reference
-InterviewState.model_rebuild()
