@@ -168,7 +168,7 @@ class InterviewManager:
             processing_time_seconds=0.0,  # Simplified: skip timing
             interview_state=None,  # Simplified: skip state tracking
             question_generated=question,
-            question_method=QuestionMethod.EXPANSION,  # Simplified: default value
+            question_method=QuestionMethod.LLM,  # Simplified: default to LLM
             question_generation_time_seconds=0.0,  # Simplified: skip timing
             errors=delta.extraction_metadata.get("validation_errors", []),
             warnings=delta.extraction_metadata.get("validation_warnings", []),
