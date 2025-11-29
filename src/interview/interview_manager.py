@@ -86,7 +86,8 @@ class InterviewManager:
 
         self._interview_started = True
         self._start_time = datetime.now()
-        self.session_id = self._start_time.strftime("%Y%m%d_%H%M%S")
+        if not self.session_id:  # Only generate if not already set by UI
+            self.session_id = self._start_time.strftime("%Y%m%d_%H%M%S")
         self.turn_number = 0
 
         opening_question = self.question_gen.get_opening_question()
@@ -184,7 +185,7 @@ class InterviewManager:
                 processing_time_seconds=processing_time,
                 interview_state=self._build_interview_state(should_terminate=True),
                 question_generated=question,
-                question_method=QuestionMethod.FALLBACK,
+                question_method=QuestionMethod.TEMPLATE,  # Closing questions use templates
                 question_generation_time_seconds=0.0,
                 errors=delta.extraction_metadata.get("validation_errors", []),
                 warnings=delta.extraction_metadata.get("validation_warnings", []),
@@ -274,6 +275,7 @@ class InterviewManager:
         node_count = self.graph.node_count
         edge_count = self.graph.edge_count
         coverage = self.graph.calculate_coverage()
+        coverage_overall = coverage["overall"]  # Extract float from dict
 
         # Get focus stack from ranker
         focus_stack = (
@@ -282,11 +284,11 @@ class InterviewManager:
 
         # Determine phase based on coverage and richness
         richness = self.graph.calculate_richness()
-        if coverage < 0.3:
+        if coverage_overall < 0.3:
             phase = InterviewPhase.COVERAGE
         elif richness < self.min_richness * 0.7:
             phase = InterviewPhase.DEPTH
-        elif coverage < 0.8:
+        elif coverage_overall < 0.8:
             phase = InterviewPhase.CONNECTION
         else:
             phase = InterviewPhase.WRAP_UP
@@ -298,7 +300,7 @@ class InterviewManager:
             graph_node_count=node_count,
             graph_edge_count=edge_count,
             cumulative_richness=richness,
-            coverage_pct=coverage,
+            coverage_pct=coverage_overall,
             avg_node_depth=0.0,  # TODO: Calculate if needed
             top_opportunity=best_opportunity,
             focus_stack=focus_stack,
