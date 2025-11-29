@@ -10,9 +10,12 @@ Defines all data structures used across the application:
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from src.interview.opportunity_ranker import RankedOpportunity
 
 # ============================================================================
 # Graph Elements
@@ -143,7 +146,7 @@ class InterviewState(BaseModel):
     avg_node_depth: float = Field(default=0.0, description="Average depth of nodes from seeds")
 
     # Interview progression
-    top_opportunity: Opportunity | None = Field(
+    top_opportunity: "RankedOpportunity | None" = Field(
         default=None, description="Highest priority opportunity"
     )
     focus_stack: list[str] = Field(
