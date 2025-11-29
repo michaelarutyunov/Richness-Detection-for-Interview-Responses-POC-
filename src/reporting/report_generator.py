@@ -196,14 +196,10 @@ class ReportGenerator:
                 lines.append(f"- {node.label} ({node.type})")
             lines.append("")
 
-        # Cumulative richness - handle None interview_state
-        cumulative_richness = 0.0
-        if turn_log.interview_state and hasattr(turn_log.interview_state, "cumulative_richness"):
-            cumulative_richness = turn_log.interview_state.cumulative_richness
-
+        # Cumulative richness from interview state
         lines.extend(
             [
-                f"**Cumulative Richness:** {cumulative_richness:.2f}",
+                f"**Cumulative Richness:** {turn_log.interview_state.cumulative_richness:.2f}",
                 "",
             ]
         )

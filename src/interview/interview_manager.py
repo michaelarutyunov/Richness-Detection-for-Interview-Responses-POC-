@@ -5,9 +5,15 @@ Coordinates opportunity ranking, question generation, and response processing.
 """
 
 import logging
+import time
 from datetime import datetime
 
-from src.core.data_models import QuestionMethod, TurnLog
+from src.core.data_models import (
+    InterviewPhase,
+    InterviewState,
+    QuestionMethod,
+    TurnLog,
+)
 from src.core.interview_graph import InterviewGraph
 from src.core.schema_manager import SchemaManager
 from src.interview.opportunity_ranker import OpportunityRanker
@@ -65,6 +71,7 @@ class InterviewManager:
         self.max_turns = max_turns
         self._interview_started = False
         self.session_id = ""  # Will be set when interview starts
+        self._start_time: datetime | None = None  # Track when interview started
 
     async def start_interview(self) -> str:
         """
@@ -78,6 +85,7 @@ class InterviewManager:
             return "We're already talking! What else would you like to share?"
 
         self._interview_started = True
+        self._start_time = datetime.now()
         self.turn_number = 0
 
         opening_question = self.question_gen.get_opening_question()
@@ -101,6 +109,9 @@ class InterviewManager:
             logger.warning("Interview not started yet")
             return await self.start_interview()
 
+        # Start timing
+        turn_start_time = time.time()
+
         self.turn_number += 1
 
         # Add response to history
@@ -117,15 +128,38 @@ class InterviewManager:
         # Apply delta to graph
         nodes_added, edges_added = self.graph.apply_delta(delta, self.turn_number)
 
+        processing_time = time.time() - turn_start_time
+
         logger.info(
             f"Turn {self.turn_number}: Extracted {nodes_added} nodes, "
             f"{edges_added} edges (richness: {delta.richness_score:.2f})"
         )
 
         # Check if should continue
-        if not self.should_continue():
+        should_terminate = not self.should_continue()
+        if should_terminate:
             question = await self._get_closing_question()
             self.conversation_history.append({"role": "assistant", "content": question})
+
+            # Create turn log for termination
+            turn_log = TurnLog(
+                session_id=self.session_id,
+                turn_number=self.turn_number,
+                timestamp=datetime.now(),
+                schema_version="1.0",
+                participant_response=participant_response,
+                participant_response_length=len(participant_response),
+                graph_delta=delta,
+                processing_time_seconds=processing_time,
+                interview_state=self._build_interview_state(should_terminate=True),
+                question_generated=question,
+                question_method=QuestionMethod.TEMPLATE,  # Closing questions use templates
+                question_generation_time_seconds=0.0,
+                errors=delta.extraction_metadata.get("validation_errors", []),
+                warnings=delta.extraction_metadata.get("validation_warnings", []),
+            )
+            self.turn_logs.append(turn_log)
+
             return question
 
         # Select next opportunity
@@ -136,6 +170,26 @@ class InterviewManager:
             logger.info("No opportunities remaining")
             question = await self._get_closing_question()
             self.conversation_history.append({"role": "assistant", "content": question})
+
+            # Create turn log
+            turn_log = TurnLog(
+                session_id=self.session_id,
+                turn_number=self.turn_number,
+                timestamp=datetime.now(),
+                schema_version="1.0",
+                participant_response=participant_response,
+                participant_response_length=len(participant_response),
+                graph_delta=delta,
+                processing_time_seconds=processing_time,
+                interview_state=self._build_interview_state(should_terminate=True),
+                question_generated=question,
+                question_method=QuestionMethod.FALLBACK,
+                question_generation_time_seconds=0.0,
+                errors=delta.extraction_metadata.get("validation_errors", []),
+                warnings=delta.extraction_metadata.get("validation_warnings", []),
+            )
+            self.turn_logs.append(turn_log)
+
             return question
 
         # Take best opportunity
@@ -145,18 +199,25 @@ class InterviewManager:
         self.ranker.update_focus(best_opportunity.node_id)
 
         # Generate question
+        question_start_time = time.time()
         question = await self.question_gen.generate_question(
             opportunity=best_opportunity,
             graph=self.graph,
             conversation_history=self.conversation_history,
         )
+        question_gen_time = time.time() - question_start_time
 
         logger.info(f"Next question (strategy: {best_opportunity.strategy}): {question[:50]}...")
 
         # Add to history
         self.conversation_history.append({"role": "assistant", "content": question})
 
-        # Create turn log (simplified - dummy values for timing/state)
+        # Build interview state snapshot
+        interview_state = self._build_interview_state(
+            best_opportunity=best_opportunity, should_terminate=False
+        )
+
+        # Create turn log with proper state and timing
         turn_log = TurnLog(
             session_id=self.session_id,
             turn_number=self.turn_number,
@@ -165,11 +226,11 @@ class InterviewManager:
             participant_response=participant_response,
             participant_response_length=len(participant_response),
             graph_delta=delta,
-            processing_time_seconds=0.0,  # Simplified: skip timing
-            interview_state=None,  # Simplified: skip state tracking
+            processing_time_seconds=processing_time,
+            interview_state=interview_state,
             question_generated=question,
-            question_method=QuestionMethod.LLM,  # Simplified: default to LLM
-            question_generation_time_seconds=0.0,  # Simplified: skip timing
+            question_method=QuestionMethod.LLM,  # Generated via LLM
+            question_generation_time_seconds=question_gen_time,
             errors=delta.extraction_metadata.get("validation_errors", []),
             warnings=delta.extraction_metadata.get("validation_warnings", []),
         )
@@ -194,6 +255,58 @@ class InterviewManager:
     async def _get_closing_question(self) -> str:
         """Get closing question."""
         return self.question_gen.get_closing_question()
+
+    def _build_interview_state(
+        self, best_opportunity=None, should_terminate: bool = False
+    ) -> InterviewState:
+        """
+        Build current interview state snapshot.
+
+        Args:
+            best_opportunity: Current best opportunity (if any)
+            should_terminate: Whether interview should terminate
+
+        Returns:
+            InterviewState: Current state snapshot
+        """
+        # Calculate graph metrics
+        node_count = self.graph.node_count
+        edge_count = self.graph.edge_count
+        coverage = self.graph.calculate_coverage()
+
+        # Get focus stack from ranker
+        focus_stack = (
+            self.ranker._focus_stack.copy() if hasattr(self.ranker, "_focus_stack") else []
+        )
+
+        # Determine phase based on coverage and richness
+        richness = self.graph.calculate_richness()
+        if coverage < 0.3:
+            phase = InterviewPhase.COVERAGE
+        elif richness < self.min_richness * 0.7:
+            phase = InterviewPhase.DEPTH
+        elif coverage < 0.8:
+            phase = InterviewPhase.CONNECTION
+        else:
+            phase = InterviewPhase.WRAP_UP
+
+        return InterviewState(
+            session_id=self.session_id,
+            turn_number=self.turn_number,
+            phase=phase,
+            graph_node_count=node_count,
+            graph_edge_count=edge_count,
+            cumulative_richness=richness,
+            coverage_pct=coverage,
+            avg_node_depth=0.0,  # TODO: Calculate if needed
+            top_opportunity=best_opportunity,
+            focus_stack=focus_stack,
+            dead_end_nodes=[],  # TODO: Track if needed
+            should_terminate=should_terminate,
+            termination_reason="Target richness reached" if should_terminate else None,
+            started_at=self._start_time or datetime.now(),
+            last_response_at=datetime.now(),
+        )
 
     def get_summary(self) -> dict:
         """

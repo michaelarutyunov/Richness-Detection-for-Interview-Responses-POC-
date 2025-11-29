@@ -138,6 +138,7 @@ class InterviewState(BaseModel):
     # Graph metrics
     graph_node_count: int = Field(..., description="Total nodes in graph")
     graph_edge_count: int = Field(..., description="Total edges in graph")
+    cumulative_richness: float = Field(..., description="Total richness score accumulated")
     coverage_pct: float = Field(..., description="Percentage of seed nodes explored (0.0-1.0)")
     avg_node_depth: float = Field(default=0.0, description="Average depth of nodes from seeds")
 
@@ -196,7 +197,7 @@ class TurnLog(BaseModel):
     processing_time_seconds: float = Field(default=0.0, description="Time to process response")
 
     # State
-    interview_state: InterviewState | None = Field(None, description="State after processing")
+    interview_state: InterviewState = Field(..., description="State after processing")
 
     # Output
     question_generated: str = Field(..., description="Next question to ask")
