@@ -10,12 +10,9 @@ Defines all data structures used across the application:
 
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
-if TYPE_CHECKING:
-    from src.interview.opportunity_ranker import RankedOpportunity
 
 # ============================================================================
 # Graph Elements
@@ -329,3 +326,10 @@ class LLMExtractionResponse(BaseModel):
 
     nodes_added: list[ExtractedNode] = Field(default_factory=list)
     edges_added: list[ExtractedEdge] = Field(default_factory=list)
+
+
+# Import after all models are defined to avoid circular imports
+from src.interview.opportunity_ranker import RankedOpportunity  # noqa: E402
+
+# Rebuild InterviewState to resolve forward reference
+InterviewState.model_rebuild()
