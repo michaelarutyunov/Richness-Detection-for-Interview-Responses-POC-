@@ -343,6 +343,11 @@ class RelationshipExtractor:
         """
         Infer edge type based on node types and causal marker.
 
+        Priority order:
+        1. Upward relationships (leads_to) - means-end chain
+        2. Enablement (enables) - practical causation
+        3. Correlation (correlates_with) - associations
+
         Args:
             source_type: Type of source node
             target_type: Type of target node
@@ -357,6 +362,7 @@ class RelationshipExtractor:
         upward_pairs = {
             ("attribute", "functional_consequence"): "leads_to",
             ("attribute", "psychosocial_consequence"): "leads_to",
+            ("attribute", "value"): "leads_to",  # Direct skip possible
             ("functional_consequence", "psychosocial_consequence"): "leads_to",
             ("functional_consequence", "value"): "leads_to",
             ("psychosocial_consequence", "value"): "leads_to",
@@ -365,23 +371,27 @@ class RelationshipExtractor:
         if (source_type, target_type) in upward_pairs:
             return upward_pairs[(source_type, target_type)]
 
-        # Same-level relationships
-        if source_type == target_type:
-            # Use "correlates_with" for associations
-            if any(word in marker_lower for word in ["related", "associated", "with"]):
-                return "correlates_with"
-            # Use "enables" for enablement language
-            elif any(word in marker_lower for word in ["enables", "allows", "lets"]):
-                return "enables"
-
-        # Enablement between different levels
-        if any(word in marker_lower for word in ["enables", "allows", "makes possible"]):
+        # Check for enablement language FIRST (before same-level check)
+        enablement_words = ["enables", "allows", "lets", "means", "makes possible", "helps"]
+        if any(word in marker_lower for word in enablement_words):
+            # Valid for: attribute/functional → attribute/functional/psychosocial
             if source_type in ["attribute", "functional_consequence"] and target_type in [
                 "attribute",
                 "functional_consequence",
                 "psychosocial_consequence",
             ]:
                 return "enables"
+
+        # Same-level relationships (fallback)
+        if source_type == target_type:
+            # Check for explicit correlation language
+            if any(word in marker_lower for word in ["related", "associated", "with", "goes"]):
+                return "correlates_with"
+            # Default same-level enablement (if not caught above)
+            elif source_type in ["attribute", "functional_consequence"]:
+                return "enables"
+            else:
+                return "correlates_with"  # Fallback for psychosocial/value same-level
 
         # No valid relationship inferred
         return None
