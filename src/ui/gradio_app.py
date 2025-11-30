@@ -17,8 +17,7 @@ from src.interview.concept_extractor import ConceptExtractor
 from src.interview.interview_manager import InterviewManager
 from src.interview.prompt_builder import PromptBuilder
 from src.interview.validator import Validator
-from src.llm.anthropic_client import AnthropicClient
-from src.llm.kimi_client import KimiClient
+from src.llm.client_factory import LLMClientFactory
 
 # Load environment variables
 load_dotenv()
@@ -41,22 +40,14 @@ class InterviewSession:
         self.schema.load_schema()
         self.schema.validate_schema()
 
-        # Create LLM clients
-        self.extraction_client = KimiClient(
-            api_key=os.getenv("KIMI_API_KEY", ""),
-            model="moonshot-v1-32k",
-            temperature=0.3,
-            max_tokens=2000,
-            timeout=30,
-        )
+        # Create LLM clients from config (factory pattern)
+        config_path = "configs/model_config.yaml"
+        self.extraction_client = LLMClientFactory.create_client("graph_processing", config_path)
+        self.question_client = LLMClientFactory.create_client("question_generation", config_path)
 
-        self.question_client = AnthropicClient(
-            api_key=os.getenv("ANTHROPIC_API_KEY", ""),
-            model="claude-sonnet-4-20250514",
-            temperature=0.7,
-            max_tokens=300,
-            timeout=20,
-        )
+        # Log active models for visibility
+        logger.info(f"Extraction model: {self.extraction_client.model}")
+        logger.info(f"Question generation model: {self.question_client.model}")
 
         # Create concept extractor
         self.concept_extractor = ConceptExtractor(

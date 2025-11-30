@@ -112,6 +112,7 @@ class AnthropicClient(BaseLLMClient):
                 tokens_used=tokens_used,
                 latency_ms=latency_ms,
                 model_used=self.model,
+                reasoning_content=None,  # Anthropic doesn't provide reasoning content
             )
 
         except Exception as e:

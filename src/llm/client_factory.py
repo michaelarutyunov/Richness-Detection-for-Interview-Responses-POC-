@@ -57,6 +57,10 @@ class LLMClientFactory:
         # Get provider-specific settings
         provider_settings = config.provider_settings.get(model_config.provider)
 
+        # Log reasoning capability
+        if model_config.supports_reasoning:
+            logger.info(f"{task}: Using reasoning-capable model {model_config.model}")
+
         # Create appropriate client based on provider
         if model_config.provider == "moonshot":
             base_url = (

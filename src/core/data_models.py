@@ -214,6 +214,9 @@ class TurnLog(BaseModel):
     question_generation_time_seconds: float = Field(
         default=0.0, description="Time to generate question"
     )
+    reasoning_trace: str | None = Field(
+        default=None, description="K2-thinking reasoning trace (if thinking model used)"
+    )
 
     # Errors (if any)
     errors: list[str] = Field(

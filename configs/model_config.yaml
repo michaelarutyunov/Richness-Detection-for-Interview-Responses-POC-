@@ -12,16 +12,18 @@ models:
     timeout_seconds: 10
     # For structured output/function calling
     supports_function_calling: true
+    supports_reasoning: false  # Turbo model doesn't have reasoning
 
   # Question Generation (Natural, Conversational)
   question_generation:
-    provider: "anthropic"  # Claude
-    model: "claude-sonnet-4-5"
-    api_key_env: "ANTHROPIC_API_KEY"
-    temperature: 0.7  # Higher temperature for variety
-    max_tokens: 150
-    timeout_seconds: 5
+    provider: "moonshot"  # Kimi K2 Thinking (was: anthropic)
+    model: "kimi-k2-thinking"  # (was: claude-sonnet-4-5)
+    api_key_env: "KIMI_API_KEY"
+    temperature: 1.0  # K2-thinking recommended temp (was: 0.7)
+    max_tokens: 300  # Increased for reasoning content (was: 150)
+    timeout_seconds: 15  # Increased for thinking latency (was: 5)
     supports_function_calling: true
+    supports_reasoning: true  # NEW: Enable reasoning extraction
 
 # Fallback Models (if primary fails)
 fallbacks:
@@ -34,6 +36,9 @@ fallbacks:
       api_key_env: "OPENAI_API_KEY"
 
   question_generation:
+    - provider: "anthropic"
+      model: "claude-sonnet-4-5"
+      api_key_env: "ANTHROPIC_API_KEY"
     - provider: "anthropic"
       model: "claude-haiku-4-5-20251001"
       api_key_env: "ANTHROPIC_API_KEY"

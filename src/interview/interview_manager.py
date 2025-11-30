@@ -233,6 +233,7 @@ class InterviewManager:
             question_generated=question,
             question_method=QuestionMethod.LLM,  # Generated via LLM
             question_generation_time_seconds=question_gen_time,
+            reasoning_trace=self.question_gen.last_reasoning_trace,  # Capture K2-thinking trace
             errors=delta.extraction_metadata.get("validation_errors", []),
             warnings=delta.extraction_metadata.get("validation_warnings", []),
         )

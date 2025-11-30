@@ -50,6 +50,7 @@ class QuestionGenerator:
         self.use_llm = use_llm and llm_client is not None
         self._templates = self._load_templates(templates_path)
         self._question_history = []  # Track recent questions
+        self.last_reasoning_trace = None  # Track last reasoning trace from thinking models
 
         # Deduplication settings
         self.enable_repetition_detection = enable_repetition_detection
@@ -226,6 +227,13 @@ class QuestionGenerator:
         response = await self.llm.generate_with_retry(messages, max_retries=1)
 
         if response.content:
+            # Store and log reasoning if available (K2-thinking models)
+            if response.reasoning_content:
+                self.last_reasoning_trace = response.reasoning_content
+                logger.info(f"K2-Thinking trace: {response.reasoning_content}")
+            else:
+                self.last_reasoning_trace = None
+
             return response.content.strip().strip('"').strip("'")
 
         return None

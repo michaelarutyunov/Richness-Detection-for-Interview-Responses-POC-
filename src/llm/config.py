@@ -25,6 +25,7 @@ class ModelConfig(BaseModel):
     max_tokens: int = Field(gt=0)
     timeout_seconds: int = Field(gt=0)
     supports_function_calling: bool = True
+    supports_reasoning: bool = False  # NEW: For thinking models like K2-thinking
 
 
 class RetryConfig(BaseModel):

@@ -21,6 +21,7 @@ class LLMResponse:
     tokens_used: int = 0
     latency_ms: int = 0
     model_used: str = ""
+    reasoning_content: str | None = None  # NEW: For thinking models (K2-thinking CoT)
 
 
 class BaseLLMClient(ABC):

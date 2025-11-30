@@ -84,6 +84,7 @@ class KimiClient(BaseLLMClient):
             # Extract function call if present
             function_call = None
             content = ""
+            reasoning_content = None  # NEW: For K2-thinking
 
             if response.choices[0].message.tool_calls:
                 tool_call = response.choices[0].message.tool_calls[0]
@@ -91,6 +92,12 @@ class KimiClient(BaseLLMClient):
                 logger.debug(f"Kimi function call: {function_call}")
             elif response.choices[0].message.content:
                 content = response.choices[0].message.content
+
+            # Extract reasoning content for K2-thinking model
+            if "thinking" in self.model.lower() and hasattr(response.choices[0].message, 'reasoning_content'):
+                reasoning_content = response.choices[0].message.reasoning_content
+                if reasoning_content:
+                    logger.debug(f"K2-thinking reasoning: {reasoning_content[:200]}...")
 
             tokens_used = response.usage.total_tokens if response.usage else 0
 
@@ -100,6 +107,7 @@ class KimiClient(BaseLLMClient):
                 tokens_used=tokens_used,
                 latency_ms=latency_ms,
                 model_used=self.model,
+                reasoning_content=reasoning_content,  # NEW
             )
 
         except Exception as e:
