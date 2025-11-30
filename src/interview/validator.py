@@ -137,8 +137,15 @@ class Validator:
                         f"Node '{label}': Quote '{quote[:50]}...' not found in response"
                     )
 
-                # Node is valid
-                cleaned_nodes.append(ExtractedNode(type=node_type, label=label, quote=quote))
+                # Node is valid - create cleaned node
+                cleaned_node = ExtractedNode(type=node_type, label=label, quote=quote)
+
+                # Check for potential misclassification (generates warnings, not errors)
+                misclassification_warnings = self._check_potential_misclassification(cleaned_node)
+                warnings.extend(misclassification_warnings)
+
+                # Add to cleaned nodes list
+                cleaned_nodes.append(cleaned_node)
 
             except Exception as e:
                 errors.append(f"Node {idx}: Unexpected validation error: {e}")
@@ -261,3 +268,52 @@ class Validator:
             cleaned_nodes=cleaned_nodes,
             cleaned_edges=cleaned_edges,
         )
+
+    def _check_potential_misclassification(self, node: ExtractedNode) -> list[str]:
+        """
+        Check if node might be misclassified based on linguistic patterns.
+
+        This is a heuristic check that generates warnings (not errors) to help
+        identify potential node type misclassifications. The extraction is still
+        valid even if warnings are generated.
+
+        Args:
+            node: Extracted node to check
+
+        Returns:
+            List of warning messages (empty if no potential issues detected)
+        """
+        warnings = []
+        label_lower = node.label.lower()
+
+        # Check if "attribute" has outcome-suggesting words
+        if node.type == "attribute":
+            outcome_indicators = [
+                "saves",
+                "stays",
+                "keeps",
+                "lasts",
+                "prevents",
+                "enables",
+                "allows",
+                "avoids",
+                "reduces",
+                "improves",
+            ]
+            if any(word in label_lower for word in outcome_indicators):
+                warnings.append(
+                    f"Node '{node.label}' typed as 'attribute' but contains outcome language "
+                    f"(found: {[w for w in outcome_indicators if w in label_lower]}). "
+                    f"Consider 'functional_consequence' if this is a result/outcome."
+                )
+
+        # Check if "functional_consequence" is actually a static property
+        if node.type == "functional_consequence":
+            static_indicators = ["has_", "is_", "comes_with", "made_of", "from_"]
+            if any(label_lower.startswith(ind) for ind in static_indicators):
+                warnings.append(
+                    f"Node '{node.label}' typed as 'functional_consequence' but appears static. "
+                    f"Consider 'attribute' if this is a product feature."
+                )
+
+        return warnings
