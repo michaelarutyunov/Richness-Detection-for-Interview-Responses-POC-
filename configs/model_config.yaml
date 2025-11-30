@@ -31,17 +31,37 @@ fallbacks:
     - provider: "anthropic"
       model: "claude-haiku-4-5-20251001"
       api_key_env: "ANTHROPIC_API_KEY"
+      temperature: 0.3
+      max_tokens: 1000
+      timeout_seconds: 10
+      supports_function_calling: true
+      supports_reasoning: false
     - provider: "openai"
       model: "gpt-4o-mini"
       api_key_env: "OPENAI_API_KEY"
+      temperature: 0.3
+      max_tokens: 1000
+      timeout_seconds: 10
+      supports_function_calling: true
+      supports_reasoning: false
 
   question_generation:
     - provider: "anthropic"
       model: "claude-sonnet-4-5"
       api_key_env: "ANTHROPIC_API_KEY"
+      temperature: 0.7
+      max_tokens: 300
+      timeout_seconds: 15
+      supports_function_calling: true
+      supports_reasoning: false
     - provider: "anthropic"
       model: "claude-haiku-4-5-20251001"
       api_key_env: "ANTHROPIC_API_KEY"
+      temperature: 0.7
+      max_tokens: 300
+      timeout_seconds: 10
+      supports_function_calling: true
+      supports_reasoning: false
 
 # Retry Configuration
 retry_config:
