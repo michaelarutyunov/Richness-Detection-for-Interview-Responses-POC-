@@ -310,7 +310,7 @@ class InterviewUI:
 
     async def start_interview_with_concept(
         self, concept_description: str
-    ) -> tuple[list, dict, str]:
+    ) -> tuple[list, dict, str, list, list, str]:
         """Start new interview with concept description."""
         if not concept_description or not concept_description.strip():
             error_msg = [
@@ -320,6 +320,9 @@ class InterviewUI:
                 error_msg,
                 {"nodes": 0, "edges": 0, "coverage": "0%", "richness": 0.0, "turns": 0},
                 "Error: No concept",
+                [],
+                [],
+                "No changes yet",
             )
 
         # Create new session
@@ -338,7 +341,7 @@ class InterviewUI:
             session_id = self.current_session.session_id
 
             logger.info(f"Interview started: {session_id}")
-            return history, stats, session_id
+            return history, stats, session_id, [], [], "No changes yet"
         except Exception as e:
             logger.error(f"Failed to start interview: {e}")
             error_msg = [
@@ -351,11 +354,14 @@ class InterviewUI:
                 error_msg,
                 {"nodes": 0, "edges": 0, "coverage": "0%", "richness": 0.0, "turns": 0},
                 "Error",
+                [],
+                [],
+                "Error occurred",
             )
 
     async def process_response(
         self, user_response: str, history: list
-    ) -> tuple[list, str, dict, str]:
+    ) -> tuple[list, str, dict, str, list, list, str]:
         """Process participant response and generate next question."""
         if not self.current_session:
             return (
@@ -363,10 +369,21 @@ class InterviewUI:
                 "",
                 {"nodes": 0, "edges": 0, "coverage": "0%", "richness": 0.0, "turns": 0},
                 "No active session",
+                [],
+                [],
+                "No active session",
             )
 
         if not user_response or not user_response.strip():
-            return history, "", self.current_session.get_stats(), self.current_session.session_id
+            return (
+                history,
+                "",
+                self.current_session.get_stats(),
+                self.current_session.session_id,
+                [],
+                [],
+                "No changes yet",
+            )
 
         try:
             # Process response
@@ -379,18 +396,72 @@ class InterviewUI:
             # Get updated stats
             stats = self.current_session.get_stats()
 
+            # Extract latest delta for dynamic display
+            latest_turn_log = (
+                self.current_session.manager.turn_logs[-1]
+                if self.current_session.manager.turn_logs
+                else None
+            )
+            if latest_turn_log:
+                delta = latest_turn_log.graph_delta
+
+                # Format nodes for display
+                new_nodes_data = []
+                for node in delta.nodes_added:
+                    quote = node.source_quotes[0][:50] + "..." if node.source_quotes else ""
+                    new_nodes_data.append(
+                        [node.type, node.label, quote, f"Turn {node.creation_turn}"]
+                    )
+
+                # Format edges for display
+                new_edges_data = []
+                for edge in delta.edges_added:
+                    quote = edge.source_quote[:50] + "..." if edge.source_quote else ""
+                    # Include confidence if less than 1.0 (uncertain)
+                    edge_type = edge.type
+                    if hasattr(edge, "confidence") and edge.confidence < 1.0:
+                        edge_type = f"{edge.type} ({int(edge.confidence * 100)}%)"
+                    new_edges_data.append(
+                        [edge_type, f"{edge.source} → {edge.target}", quote, f"Turn {edge.creation_turn}"]
+                    )
+
+                # Create summary badge
+                nodes_count = len(delta.nodes_added)
+                edges_count = len(delta.edges_added)
+                summary = f"🆕 **This turn:** {nodes_count} nodes, {edges_count} edges added"
+            else:
+                new_nodes_data = []
+                new_edges_data = []
+                summary = "No changes yet"
+
             # Check if complete
             if self.current_session.is_complete():
                 completion_msg = "\n\n✅ **Interview Complete!** Thank you for your time."
                 history[-1]["content"] += completion_msg
 
-            return history, "", stats, self.current_session.session_id
+            return (
+                history,
+                "",
+                stats,
+                self.current_session.session_id,
+                new_nodes_data,
+                new_edges_data,
+                summary,
+            )
         except Exception as e:
             logger.error(f"Error processing response: {e}")
             error_msg = f"Sorry, I encountered an error: {str(e)}"
             history.append({"role": "user", "content": user_response})
             history.append({"role": "assistant", "content": error_msg})
-            return history, "", self.current_session.get_stats(), self.current_session.session_id
+            return (
+                history,
+                "",
+                self.current_session.get_stats(),
+                self.current_session.session_id,
+                [],
+                [],
+                "Error occurred",
+            )
 
     def refresh_visualization(self):
         """Refresh graph visualization and tables."""
@@ -602,6 +673,30 @@ class InterviewUI:
                                 },
                             )
 
+                            # Dynamic delta display
+                            with gr.Accordion("Latest Graph Changes", open=True):
+                                delta_summary = gr.Markdown("No changes yet")
+
+                                gr.Markdown("### Newly Added Nodes")
+                                new_nodes_display = gr.Dataframe(
+                                    headers=["Type", "Label", "Source Quote", "Turn"],
+                                    value=[],
+                                    label="Nodes Added This Turn",
+                                    interactive=False,
+                                    wrap=True,
+                                    column_widths=["15%", "25%", "45%", "15%"],
+                                )
+
+                                gr.Markdown("### Newly Added Relationships")
+                                new_edges_display = gr.Dataframe(
+                                    headers=["Type", "Relationship", "Source Quote", "Turn"],
+                                    value=[],
+                                    label="Edges Added This Turn",
+                                    interactive=False,
+                                    wrap=True,
+                                    column_widths=["20%", "25%", "40%", "15%"],
+                                )
+
                     # Instructions
                     with gr.Accordion("ℹ️ How to use", open=False):
                         gr.Markdown(
@@ -744,19 +839,42 @@ class InterviewUI:
             start_btn.click(
                 fn=self.start_interview_with_concept,
                 inputs=[concept_input],
-                outputs=[chatbot, graph_stats, session_id_display],
+                outputs=[
+                    chatbot,
+                    graph_stats,
+                    session_id_display,
+                    new_nodes_display,
+                    new_edges_display,
+                    delta_summary,
+                ],
             )
 
             submit_btn.click(
                 fn=self.process_response,
                 inputs=[user_input, chatbot],
-                outputs=[chatbot, user_input, graph_stats, session_id_display],
+                outputs=[
+                    chatbot,
+                    user_input,
+                    graph_stats,
+                    session_id_display,
+                    new_nodes_display,
+                    new_edges_display,
+                    delta_summary,
+                ],
             )
 
             user_input.submit(
                 fn=self.process_response,
                 inputs=[user_input, chatbot],
-                outputs=[chatbot, user_input, graph_stats, session_id_display],
+                outputs=[
+                    chatbot,
+                    user_input,
+                    graph_stats,
+                    session_id_display,
+                    new_nodes_display,
+                    new_edges_display,
+                    delta_summary,
+                ],
             )
 
             clear_btn.click(
