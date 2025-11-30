@@ -11,6 +11,10 @@ graph_extraction:
     2. Extract STRONGLY IMPLIED relationships with clear causal language (MEDIUM CONFIDENCE)
     3. Include confidence scores for each relationship (0.0-1.0)
     4. Do NOT hallucinate or over-infer - when uncertain, mark as low confidence or skip
+    5. DISTINGUISH FEATURES FROM OUTCOMES:
+       - Attributes = static product features ("locally roasted", "affordable", "red packaging")
+       - Functional consequences = dynamic outcomes ("stays fresh", "saves money", "matches kitchen")
+       - Test: "Because of [attribute], I get [functional consequence]"
 
     CAUSAL LANGUAGE MARKERS (indicate relationships):
     - Direct: "because", "so", "therefore", "leads to", "causes", "results in"
@@ -67,6 +71,9 @@ graph_extraction:
     Analyze the participant's response and extract:
     1. **New Nodes**: Concepts mentioned that aren't in the existing graph
        - Match to the defined node types
+       - CRITICAL: Distinguish attributes (FEATURES) from functional consequences (OUTCOMES)
+         * Attribute: "locally roasted" (WHERE/HOW it's made - a feature)
+         * Functional: "fresh beans" (RESULT of local roasting - an outcome)
        - Create clear, descriptive labels (lowercase_with_underscores)
        - Include the exact quote that supports each node
 
@@ -178,6 +185,42 @@ graph_extraction:
             target: "one_handed_opening"
             quote: "The packaging is really convenient - I can open it with one hand"
             confidence: 1.0  # Explicitly stated enablement
+
+    - input: "I like that it's locally roasted. It means the beans will be fresh and the coffee will be very aromatic."
+      output:
+        nodes_added:
+          - type: "attribute"
+            label: "locally_roasted"
+            quote: "it's locally roasted"
+            # NOTE: This is a FEATURE - where/how it's made
+          - type: "functional_consequence"
+            label: "fresh_beans"
+            quote: "beans will be fresh"
+            # NOTE: This is an OUTCOME - freshness results from local roasting
+          - type: "functional_consequence"
+            label: "aromatic_coffee"
+            quote: "coffee will be very aromatic"
+            # NOTE: This is an OUTCOME - aroma results from freshness
+        edges_added:
+          - type: "enables"
+            source: "locally_roasted"
+            target: "fresh_beans"
+            quote: "locally roasted. It means the beans will be fresh"
+            confidence: 0.8  # "means" is strong causal language
+          - type: "leads_to"
+            source: "fresh_beans"
+            target: "aromatic_coffee"
+            quote: "beans will be fresh and the coffee will be very aromatic"
+            confidence: 0.7  # Implicit connection ("and" suggests sequence)
+      explanation: |
+        Classification logic:
+        - "locally roasted" = attribute (feature of the product - WHERE/HOW it's made)
+        - "fresh beans" = functional_consequence (outcome enabled by local roasting)
+        - "aromatic coffee" = functional_consequence (outcome of freshness)
+
+        Edge logic:
+        - attribute → functional = "enables" (local roasting makes freshness possible)
+        - functional → functional = "leads_to" (freshness causes aroma)
 
 # Coreference Resolution Prompts (Phase 2 feature)
 coreference_resolution:
