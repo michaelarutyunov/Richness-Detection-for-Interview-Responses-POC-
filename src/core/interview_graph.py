@@ -157,6 +157,31 @@ class InterviewGraph:
             return None
         return self.graph.nodes[node_id]["data"]
 
+    def visit_node(self, node_id: str, turn_number: int) -> None:
+        """
+        Mark a node as visited when a question is asked about it.
+
+        This is different from add_node() which only increments visit_count
+        when the same node is extracted multiple times. This method should
+        be called when the interviewer asks a question about an existing node.
+
+        Args:
+            node_id: ID of the node being questioned
+            turn_number: Current turn number when the question is asked
+        """
+        if not self.graph.has_node(node_id):
+            logger.warning(f"Attempted to visit non-existent node: {node_id}")
+            return
+
+        node_data = self.graph.nodes[node_id]["data"]
+        node_data.visit_count += 1
+        node_data.last_visit_turn = turn_number
+
+        logger.debug(
+            f"Node '{node_id}' visited: count={node_data.visit_count}, "
+            f"turn={turn_number}"
+        )
+
     def get_neighbors(self, node_id: str, direction: str = "out") -> list[Node]:
         """
         Get neighbor nodes.

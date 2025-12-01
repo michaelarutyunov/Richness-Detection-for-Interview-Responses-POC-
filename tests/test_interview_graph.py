@@ -77,6 +77,41 @@ def test_add_duplicate_node(graph):
     assert graph.node_count == 1  # Still only 1 node
 
 
+def test_visit_node():
+    """Test that visiting a node increments visit_count and updates last_visit_turn."""
+    graph = InterviewGraph()
+
+    # Add a node
+    node = Node(
+        id="test_node",
+        type="attribute",
+        label="test_node",
+        creation_turn=1,
+        visit_count=0,
+        last_visit_turn=None
+    )
+    graph.add_node(node)
+
+    # Visit it on turn 2
+    graph.visit_node("test_node", turn_number=2)
+
+    # Check visit tracking
+    visited_node = graph.get_node("test_node")
+    assert visited_node.visit_count == 1
+    assert visited_node.last_visit_turn == 2
+
+    # Visit again on turn 5
+    graph.visit_node("test_node", turn_number=5)
+
+    # Check incremented
+    visited_node = graph.get_node("test_node")
+    assert visited_node.visit_count == 2
+    assert visited_node.last_visit_turn == 5
+
+    # Test visiting non-existent node (should log warning but not crash)
+    graph.visit_node("non_existent", turn_number=3)  # Should not raise
+
+
 def test_add_valid_edge(graph):
     """Test adding a valid edge."""
     # Add nodes first

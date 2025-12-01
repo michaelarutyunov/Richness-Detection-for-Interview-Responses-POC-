@@ -203,6 +203,9 @@ class InterviewManager:
         # Take best opportunity
         best_opportunity = opportunities[0]
 
+        # Mark the node as visited
+        self.graph.visit_node(best_opportunity.node_id, self.turn_number)
+
         # Update focus
         self.ranker.update_focus(best_opportunity.node_id)
 
