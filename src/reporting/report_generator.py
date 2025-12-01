@@ -75,8 +75,14 @@ class ReportGenerator:
             ]
         )
 
-        for turn_log in turn_logs:
-            lines.extend(ReportGenerator._format_turn(turn_log))
+        for i, turn_log in enumerate(turn_logs):
+            # Get the question that prompted this response
+            if i == 0:
+                prompting_question = "What do you like most about this product?"
+            else:
+                prompting_question = turn_logs[i-1].question_generated
+
+            lines.extend(ReportGenerator._format_turn(turn_log, prompting_question))
             lines.append("")
 
         # Metadata summary
@@ -111,7 +117,7 @@ class ReportGenerator:
         return "\n".join(lines)
 
     @staticmethod
-    def _format_turn(turn_log: TurnLog) -> list[str]:
+    def _format_turn(turn_log: TurnLog, prompting_question: str) -> list[str]:
         """Format a single turn log as Markdown."""
         lines = []
 
@@ -129,7 +135,7 @@ class ReportGenerator:
         lines.extend(
             [
                 "**Interviewer Question:**",
-                f"> {turn_log.question_generated}",
+                f"> {prompting_question}",
                 "",
                 "**Participant Response:**",
                 f"> {turn_log.participant_response}",
