@@ -167,6 +167,14 @@ class OpportunityRanker:
             # Determine strategy
             strategy = self._determine_strategy(node_id, node_data)
 
+            # Debug logging: component scores for troubleshooting identical priorities
+            logger.debug(
+                f"Node {node_id} ({node_data.label}): coverage={coverage_score:.3f}, "
+                f"depth={depth_score:.3f}, recency={recency_score:.3f}, "
+                f"focus={focus_score:.3f}, diversity={diversity_score:.3f}, "
+                f"priority={priority:.3f}, strategy={strategy.value}"
+            )
+
             opportunities.append(
                 RankedOpportunity(
                     node_id=node_id,
@@ -193,8 +201,16 @@ class OpportunityRanker:
                 )
             )
 
-        # Sort by priority (descending)
-        opportunities.sort(key=lambda o: o.priority_score, reverse=True)
+        # Sort by priority (descending) with tie-breaking
+        # If scores are identical, prioritize less-explored (fewer visits) and older nodes
+        opportunities.sort(
+            key=lambda o: (
+                o.priority_score,                    # Primary: priority score
+                -o.metadata["visit_count"],          # Tie-break 1: fewer visits (negative for descending)
+                -o.metadata["creation_turn"]         # Tie-break 2: older nodes (negative for descending)
+            ),
+            reverse=True
+        )
 
         return opportunities[:max_opportunities]
 
@@ -447,7 +463,7 @@ class OpportunityRanker:
             return QuestionStrategy.INTRODUCE_TOPIC
 
         # Visited but shallow: dig deeper
-        if out_degree < 2:
+        if out_degree < 1:  # Changed from < 2 to trigger CONNECT_CONCEPTS earlier
             return QuestionStrategy.DIG_DEEPER
 
         # Well explored: connect to other concepts

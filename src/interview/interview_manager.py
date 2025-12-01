@@ -165,7 +165,13 @@ class InterviewManager:
             return question
 
         # Select next opportunity
-        opportunities = self.ranker.rank_opportunities(max_opportunities=5)
+        # Build interview state to get current phase
+        current_state = self._build_interview_state()
+        opportunities = self.ranker.rank_opportunities(
+            max_opportunities=5,
+            current_turn=self.turn_number,
+            interview_phase=current_state.phase
+        )
 
         if not opportunities:
             # No opportunities - wrap up
