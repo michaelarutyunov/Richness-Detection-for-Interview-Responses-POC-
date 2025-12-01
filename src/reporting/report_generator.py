@@ -125,14 +125,14 @@ class ReportGenerator:
             ]
         )
 
-        # Q&A
+        # Q&A (Question first for natural conversation flow)
         lines.extend(
             [
-                "**Participant Response:**",
-                f"> {turn_log.participant_response}",
-                "",
                 "**Interviewer Question:**",
                 f"> {turn_log.question_generated}",
+                "",
+                "**Participant Response:**",
+                f"> {turn_log.participant_response}",
                 "",
             ]
         )
@@ -203,6 +203,52 @@ class ReportGenerator:
                 "",
             ]
         )
+
+        # Question Generation Logic
+        lines.extend(
+            [
+                "#### Question Generation Logic",
+                "",
+            ]
+        )
+
+        # Strategy (from interview state)
+        if hasattr(turn_log, 'interview_state') and turn_log.interview_state.top_opportunity:
+            strategy = turn_log.interview_state.top_opportunity.strategy
+            # Add strategy descriptions
+            strategy_descriptions = {
+                "INTRODUCE_TOPIC": "Introducing new unexplored topic",
+                "DIG_DEEPER": "Exploring current topic in depth",
+                "CONNECT_CONCEPTS": "Connecting related concepts",
+                "EXPLORE_GAP": "Filling gap in understanding",
+                "WRAP_UP": "Concluding interview",
+            }
+            description = strategy_descriptions.get(strategy.value, "")
+            if description:
+                lines.append(f"**Strategy:** {strategy.value} - {description}")
+            else:
+                lines.append(f"**Strategy:** {strategy.value}")
+        else:
+            lines.append("**Strategy:** N/A")
+
+        # Method (LLM/TEMPLATE/FALLBACK)
+        lines.append(f"**Method:** {turn_log.question_method.value}")
+
+        # Generation time
+        if turn_log.question_generation_time_seconds:
+            lines.append(f"**Generation Time:** {turn_log.question_generation_time_seconds:.3f}s")
+
+        # Reasoning trace (if available from thinking models)
+        if turn_log.reasoning_trace:
+            lines.extend(
+                [
+                    "",
+                    "**LLM Reasoning Trace:**",
+                    f"> {turn_log.reasoning_trace}",
+                ]
+            )
+
+        lines.append("")
 
         # LLM metadata
         metadata = turn_log.graph_delta.extraction_metadata

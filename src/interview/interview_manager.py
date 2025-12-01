@@ -34,7 +34,7 @@ class InterviewManager:
         schema_manager: SchemaManager,
         extraction_client: BaseLLMClient,
         question_client: BaseLLMClient | None = None,
-        min_richness: float = 10.0,
+        min_richness: float = 25.0,  # Increased from 10.0 to achieve 10-15 turn interviews
         max_turns: int = 20,
     ):
         """
