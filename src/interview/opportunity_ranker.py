@@ -188,6 +188,7 @@ class OpportunityRanker:
                     metadata={
                         "visit_count": node_data.visit_count,
                         "last_visit_turn": node_data.last_visit_turn,
+                        "creation_turn": node_data.creation_turn,  # Added for tie-breaking
                         "out_degree": self.graph.graph.out_degree(node_id),
                         "richness_weight": self.graph.schema.get_richness_weight(node_data.type),
                         "scores": {
