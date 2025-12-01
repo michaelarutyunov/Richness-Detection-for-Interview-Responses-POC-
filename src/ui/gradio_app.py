@@ -79,8 +79,8 @@ class InterviewSession:
             schema_manager=self.schema,
             extraction_client=self.extraction_client,
             question_client=self.question_client,
-            min_richness=8.0,  # Lower threshold for testing
-            max_turns=15,
+            min_richness=25.0,  # Changed from 8.0 for 10-15 turn interviews
+            max_turns=20,       # Changed from 15 for longer interviews
         )
         self.manager.session_id = self.session_id
 
