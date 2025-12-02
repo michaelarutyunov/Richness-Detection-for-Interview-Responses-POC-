@@ -1,0 +1,80 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d6" for="edge" attr.name="quote" attr.type="string" />
+  <key id="d5" for="edge" attr.name="creation_turn" attr.type="long" />
+  <key id="d4" for="edge" attr.name="type" attr.type="string" />
+  <key id="d3" for="node" attr.name="visit_count" attr.type="long" />
+  <key id="d2" for="node" attr.name="creation_turn" attr.type="long" />
+  <key id="d1" for="node" attr.name="label" attr.type="string" />
+  <key id="d0" for="node" attr.name="type" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="premium_service">
+      <data key="d0">attribute</data>
+      <data key="d1">premium_service</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="freshly_roasted_beans">
+      <data key="d0">attribute</data>
+      <data key="d1">freshly_roasted_beans</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="local_roasters">
+      <data key="d0">attribute</data>
+      <data key="d1">local_roasters</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="monthly_delivery">
+      <data key="d0">attribute</data>
+      <data key="d1">monthly_delivery</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="fresh_beans">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">fresh_beans</data>
+      <data key="d2">1</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="aromatic_coffee">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">aromatic_coffee</data>
+      <data key="d2">1</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="tingy_aroma">
+      <data key="d0">attribute</data>
+      <data key="d1">tingy_aroma</data>
+      <data key="d2">2</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="slightly_bitter_taste">
+      <data key="d0">attribute</data>
+      <data key="d1">slightly_bitter_taste</data>
+      <data key="d2">2</data>
+      <data key="d3">0</data>
+    </node>
+    <edge source="local_roasters" target="fresh_beans">
+      <data key="d4">leads_to</data>
+      <data key="d5">1</data>
+      <data key="d6">it mean the beans will be fresh</data>
+    </edge>
+    <edge source="fresh_beans" target="aromatic_coffee">
+      <data key="d4">leads_to</data>
+      <data key="d5">1</data>
+      <data key="d6">the beans will be fresh and the coffee will be very aromatic</data>
+    </edge>
+    <edge source="aromatic_coffee" target="tingy_aroma">
+      <data key="d4">correlates_with</data>
+      <data key="d5">2</data>
+      <data key="d6">It's kind of tingy, slightly bitter</data>
+    </edge>
+    <edge source="aromatic_coffee" target="slightly_bitter_taste">
+      <data key="d4">correlates_with</data>
+      <data key="d5">2</data>
+      <data key="d6">It's kind of tingy, slightly bitter</data>
+    </edge>
+  </graph>
+</graphml>

@@ -1,0 +1,105 @@
+# Interview Transcript
+Session ID: 20251201_133524
+Concept: A premium coffee subscription service that delivers freshly roasted beans from local roasters every month.
+Date: 20251201
+
+============================================================
+
+[Interviewer]
+What do you like most about this product?
+
+[Participant]
+I like that it is locally roasted. it mean the beans will be fresh and the coffee will be very aromatic.
+
+[Interviewer]
+When you take that first sip, how does the aroma translate into what you actually taste?
+
+[Participant]
+It's kind of tangy, slightly bitter 
+
+[Interviewer]
+I'm curious - when you're hunting for those fresh beans, what are you actually checking for?
+
+[Participant]
+information on the pack. it should have the year of the harvest and the date when it was roasted.
+
+[Interviewer]
+After you spot those dates, how do you know the coffee's going to smell as good as you hope?
+
+[Participant]
+the pack should have a small hole to smell the beans.
+
+[Interviewer]
+What does that first sniff through the little hole tell you about how the cup will actually taste?
+
+[Participant]
+it does not tell me exactly how it will taste, but it tells me if the coffee is fresh or been on the shelf for some time.
+
+[Interviewer]
+Once you catch that fresh whiff, what do you do next—grab it or keep hunting?
+
+[Participant]
+grab it
+
+[Interviewer]
+Ever grabbed one that smelled great but later tasted flat—what tipped you off something was off?
+
+[Participant]
+no, i have been lucky so far
+
+[Interviewer]
+So when you say "fresh," what shelf-time clues are you actually sniffing for?
+
+[Participant]
+i do not understand the question
+
+[Interviewer]
+Got it—so freshness is more gut feel. When stuff’s limited or “members-only,” does that make you curious or just annoyed?
+
+[Participant]
+are you talking about limited editions? I do not pay attention to it. A good coffee is a good coffee.
+
+[Interviewer]
+So when you walk past the beans and that first whiff hits—what smell tells you, "Yep, this one's worth taking home"?
+
+[Participant]
+yes, exactly
+
+[Interviewer]
+And once you get that bag home, how do you know the smell's still holding up day after day?
+
+[Participant]
+hmm.. I just brew my coffee next day and see. So far all the coffee I bought was very good.
+
+[Interviewer]
+Sounds like you trust your nose more than any date—do you ever check the roast-on stamp anyway?
+
+[Participant]
+Yes, of course i do, I said that earlier. This is a must. i just skip anything roasted a week ago or earlier.
+
+[Interviewer]
+I'm curious—have you ever thought about a subscription that ships beans just a day or two off the roast?
+
+[Participant]
+That would be great. Will save me time.
+
+[Interviewer]
+What would you do with the extra time if the beans just showed up?
+
+[Participant]
+All the usual things I do. It's just the convenience. Allows me to focus on the coffee, not the logistics. 
+
+[Interviewer]
+When you say "focus on the coffee," what part of making or drinking it feels most worth that focus to you?
+
+[Participant]
+It's the whole ritual - from opening the bag, getting that smell, then grinding, brewing and to the first sip. Then its just a pure pleasure.
+
+[Interviewer]
+Is there anything else you'd like to share before we wrap up?
+
+============================================================
+Total turns: 15
+Nodes extracted: 23
+Edges extracted: 13
+Final richness: 28.60

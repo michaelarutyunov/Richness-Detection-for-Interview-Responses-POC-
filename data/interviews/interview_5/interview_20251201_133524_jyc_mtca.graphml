@@ -1,0 +1,215 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d6" for="edge" attr.name="quote" attr.type="string" />
+  <key id="d5" for="edge" attr.name="creation_turn" attr.type="long" />
+  <key id="d4" for="edge" attr.name="type" attr.type="string" />
+  <key id="d3" for="node" attr.name="visit_count" attr.type="long" />
+  <key id="d2" for="node" attr.name="creation_turn" attr.type="long" />
+  <key id="d1" for="node" attr.name="label" attr.type="string" />
+  <key id="d0" for="node" attr.name="type" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="premium_subscription">
+      <data key="d0">attribute</data>
+      <data key="d1">premium_subscription</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="freshly_roasted_beans">
+      <data key="d0">attribute</data>
+      <data key="d1">freshly_roasted_beans</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="local_roasters">
+      <data key="d0">attribute</data>
+      <data key="d1">local_roasters</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="monthly_delivery">
+      <data key="d0">attribute</data>
+      <data key="d1">monthly_delivery</data>
+      <data key="d2">0</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="fresh_beans">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">fresh_beans</data>
+      <data key="d2">1</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="aromatic_coffee">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">aromatic_coffee</data>
+      <data key="d2">1</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="tangy_taste">
+      <data key="d0">attribute</data>
+      <data key="d1">tangy_taste</data>
+      <data key="d2">2</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="bitter_taste">
+      <data key="d0">attribute</data>
+      <data key="d1">bitter_taste</data>
+      <data key="d2">2</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="harvest_year_on_pack">
+      <data key="d0">attribute</data>
+      <data key="d1">harvest_year_on_pack</data>
+      <data key="d2">3</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="roast_date_on_pack">
+      <data key="d0">attribute</data>
+      <data key="d1">roast_date_on_pack</data>
+      <data key="d2">3</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="information_on_pack">
+      <data key="d0">attribute</data>
+      <data key="d1">information_on_pack</data>
+      <data key="d2">3</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="small_hole_in_pack">
+      <data key="d0">attribute</data>
+      <data key="d1">small_hole_in_pack</data>
+      <data key="d2">4</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="detects_freshness">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">detects_freshness</data>
+      <data key="d2">5</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="detects_shelf_time">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">detects_shelf_time</data>
+      <data key="d2">5</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="good_coffee">
+      <data key="d0">attribute</data>
+      <data key="d1">good_coffee</data>
+      <data key="d2">9</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="roasted_within_week">
+      <data key="d0">attribute</data>
+      <data key="d1">roasted_within_week</data>
+      <data key="d2">12</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="saves_time">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">saves_time</data>
+      <data key="d2">13</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="convenience">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">convenience</data>
+      <data key="d2">14</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="focus_on_coffee">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">focus_on_coffee</data>
+      <data key="d2">14</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="reduced_logistics_focus">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">reduced_logistics_focus</data>
+      <data key="d2">14</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="pure_pleasure">
+      <data key="d0">psychosocial_consequence</data>
+      <data key="d1">pure_pleasure</data>
+      <data key="d2">15</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="opening_bag_smell">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">opening_bag_smell</data>
+      <data key="d2">15</data>
+      <data key="d3">0</data>
+    </node>
+    <node id="coffee_ritual_experience">
+      <data key="d0">functional_consequence</data>
+      <data key="d1">coffee_ritual_experience</data>
+      <data key="d2">15</data>
+      <data key="d3">0</data>
+    </node>
+    <edge source="premium_subscription" target="saves_time">
+      <data key="d4">leads_to</data>
+      <data key="d5">13</data>
+      <data key="d6">That would be great. Will save me time.</data>
+    </edge>
+    <edge source="local_roasters" target="fresh_beans">
+      <data key="d4">leads_to</data>
+      <data key="d5">1</data>
+      <data key="d6">it mean the beans will be fresh</data>
+    </edge>
+    <edge source="monthly_delivery" target="convenience">
+      <data key="d4">leads_to</data>
+      <data key="d5">14</data>
+      <data key="d6">It's just the convenience.</data>
+    </edge>
+    <edge source="fresh_beans" target="aromatic_coffee">
+      <data key="d4">leads_to</data>
+      <data key="d5">1</data>
+      <data key="d6">the beans will be fresh and the coffee will be very aromatic</data>
+    </edge>
+    <edge source="harvest_year_on_pack" target="information_on_pack">
+      <data key="d4">exemplifies</data>
+      <data key="d5">3</data>
+      <data key="d6">information on the pack. it should have the year of the harvest</data>
+    </edge>
+    <edge source="roast_date_on_pack" target="information_on_pack">
+      <data key="d4">exemplifies</data>
+      <data key="d5">3</data>
+      <data key="d6">information on the pack. it should have the year of the harvest and the date when it was roasted</data>
+    </edge>
+    <edge source="small_hole_in_pack" target="aromatic_coffee">
+      <data key="d4">enables</data>
+      <data key="d5">4</data>
+      <data key="d6">the pack should have a small hole to smell the beans.</data>
+    </edge>
+    <edge source="small_hole_in_pack" target="detects_freshness">
+      <data key="d4">leads_to</data>
+      <data key="d5">5</data>
+      <data key="d6">it tells me if the coffee is fresh</data>
+    </edge>
+    <edge source="small_hole_in_pack" target="detects_shelf_time">
+      <data key="d4">leads_to</data>
+      <data key="d5">5</data>
+      <data key="d6">it tells me if the coffee is fresh or been on the shelf for some time</data>
+    </edge>
+    <edge source="convenience" target="focus_on_coffee">
+      <data key="d4">leads_to</data>
+      <data key="d5">14</data>
+      <data key="d6">Allows me to focus on the coffee, not the logistics.</data>
+    </edge>
+    <edge source="focus_on_coffee" target="coffee_ritual_experience">
+      <data key="d4">leads_to</data>
+      <data key="d5">15</data>
+      <data key="d6">It's the whole ritual - from opening the bag, getting that smell, then grinding, brewing and to the first sip</data>
+    </edge>
+    <edge source="opening_bag_smell" target="coffee_ritual_experience">
+      <data key="d4">enables</data>
+      <data key="d5">15</data>
+      <data key="d6">from opening the bag, getting that smell, then grinding, brewing</data>
+    </edge>
+    <edge source="coffee_ritual_experience" target="pure_pleasure">
+      <data key="d4">leads_to</data>
+      <data key="d5">15</data>
+      <data key="d6">from opening the bag, getting that smell, then grinding, brewing and to the first sip. Then its just a pure pleasure</data>
+    </edge>
+  </graph>
+</graphml>

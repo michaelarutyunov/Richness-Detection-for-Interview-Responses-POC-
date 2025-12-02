@@ -1,0 +1,88 @@
+# Interview Transcript
+Session ID: 20251201_225021
+Concept: A premium coffee subscription service that delivers freshly roasted beans from local roasters every month.
+Date: 20251201
+
+============================================================
+
+[Interviewer]
+What do you like most about this product?
+
+[Participant]
+I like that it is locally roasted. it mean the beans will be fresh and the coffee will be very aromatic.
+
+[Interviewer]
+When you walk into the kitchen after brewing, what does that aroma feel like for you?
+
+[Participant]
+Makes me feel fully ready for the day
+
+[Interviewer]
+What happens after you feel that "ready" - how does the rest of your morning unfold?
+
+[Participant]
+I am just doing what i planned to do
+
+[Interviewer]
+What kind of stuff are you knocking out once you're in that "planned" groove?
+
+[Participant]
+I do not get the question
+
+[Interviewer]
+Got it—so once the coffee’s doing its thing, what would make you consider leveling-up to a premium subscription?
+
+[Participant]
+If the coffee is good, costs the same i pay now and delivered to my door - what's not to like.
+
+[Interviewer]
+When you picture "good" coffee, does freshly roasted ever pop into that image?
+
+[Participant]
+Absolutely, this is a must.
+
+[Interviewer]
+So if we're talking super-fresh beans, how often would you want them turning up at your door?
+
+[Participant]
+I think if the packs are properly sealed, then once a week is fine.
+
+[Interviewer]
+When you say "costs the same," what are you actually paying now?
+
+[Participant]
+around five pounds a pack
+
+[Interviewer]
+Five quid a pack - does that feel like a sweet spot for you, or would you wince if it crept higher?
+
+[Participant]
+That's a market price, why pay more?
+
+[Interviewer]
+Sounds like you keep a close eye on value - what other little money habits show up in your coffee routine?
+
+[Participant]
+i do not understand, what money habits? What do you mean?
+
+
+[Interviewer]
+So you normally grab it from the shop - what would tempt you to have coffee landed on your doorstep instead?
+
+[Participant]
+I guess, if it would be nice if i could select the beans in advance. Perhaps ask them to be roasted to my liking, like medium or strong for example. Maybe some quality guarantee or replacement guarantee could be good too. For instance, if I do not like the beans, i could return them and get a different pack.
+
+[Interviewer]
+What would "different pack" mean to you - same beans roasted darker, or totally new origin?
+
+[Participant]
+Either i guess. i would just go on the website or app and pick a replacement. Could be different origin or roast or both.
+
+[Interviewer]
+Is there anything else you'd like to share before we wrap up?
+
+============================================================
+Total turns: 12
+Nodes extracted: 23
+Edges extracted: 13
+Final richness: 27.10

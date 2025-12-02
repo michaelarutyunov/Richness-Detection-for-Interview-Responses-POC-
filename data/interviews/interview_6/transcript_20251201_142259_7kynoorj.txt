@@ -1,0 +1,57 @@
+# Interview Transcript
+Session ID: 20251201_142259
+Concept: A premium coffee subscription service that delivers freshly roasted beans from local roasters every month.
+Date: 20251201
+
+============================================================
+
+[Interviewer]
+What do you like most about this product?
+
+[Participant]
+I like that it is locally roasted. it mean the beans will be fresh and the coffee will be very aromatic.
+
+[Interviewer]
+When you brew it, how does that aroma hit you—what’s that first moment like?
+
+[Participant]
+i feel like i wake up to a great day
+
+[Interviewer]
+What happens after that “great day” feeling—how does the rest of your morning unfold?
+
+[Participant]
+As I drink that coffee i usually check my plans, browse through the news. I feel energized. 
+
+[Interviewer]
+I'm curious—what does "energized" feel like in your body when that coffee kicks in?
+
+[Participant]
+It's a pleasant sensation, feeling agile, thinking fast.
+
+[Interviewer]
+So when you're feeling that agile and sharp, what's different about how you greet the actual day ahead?
+
+[Participant]
+i do not understand the question.
+
+[Interviewer]
+Got it—when you picture the perfect coffee moment, what little extras would make it feel truly premium for you?
+
+[Participant]
+it is great as it is, as long as it is not interrupted
+
+[Interviewer]
+I'm curious—when you grab those beans, how much does "freshly roasted" matter to that uninterrupted moment?
+
+[Participant]
+freshly roasted mean the coffee will be very aromatic and tasty and remain like it until i finish the cup
+
+[Interviewer]
+Is there anything else you'd like to share before we wrap up?
+
+============================================================
+Total turns: 7
+Nodes extracted: 17
+Edges extracted: 14
+Final richness: 28.00
