@@ -9,7 +9,7 @@ import pytest
 from src.core.data_models import Node
 from src.core.interview_graph import InterviewGraph
 from src.core.schema_manager import SchemaManager
-from src.interview.opportunity_ranker import QuestionStrategy, RankedOpportunity
+from src.interview.ranking import QuestionStrategy, RankedOpportunity
 from src.interview.question_generator import QuestionGenerator
 from src.llm.base_client import LLMResponse
 

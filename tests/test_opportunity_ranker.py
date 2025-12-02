@@ -7,7 +7,7 @@ import pytest
 from src.core.data_models import Edge, Node
 from src.core.interview_graph import InterviewGraph
 from src.core.schema_manager import SchemaManager
-from src.interview.opportunity_ranker import OpportunityRanker, QuestionStrategy
+from src.interview.ranking import OpportunityRanker, QuestionStrategy
 
 
 @pytest.fixture

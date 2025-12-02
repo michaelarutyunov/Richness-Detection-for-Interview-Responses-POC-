@@ -16,7 +16,7 @@ from src.core.data_models import (
 )
 from src.core.interview_graph import InterviewGraph
 from src.core.schema_manager import SchemaManager
-from src.interview.opportunity_ranker import OpportunityRanker
+from src.interview.ranking import OpportunityRanker
 from src.interview.prompt_builder import PromptBuilder
 from src.interview.question_generator import QuestionGenerator
 from src.interview.response_processor import ResponseProcessor

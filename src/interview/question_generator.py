@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from src.core.interview_graph import InterviewGraph
-from src.interview.opportunity_ranker import QuestionStrategy, RankedOpportunity
+from src.interview.ranking import QuestionStrategy, RankedOpportunity
 from src.interview.question_deduplicator import QuestionDeduplicator
 from src.llm.base_client import BaseLLMClient
 
