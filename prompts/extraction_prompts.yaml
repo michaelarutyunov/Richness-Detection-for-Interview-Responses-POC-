@@ -1,50 +1,56 @@
 # LLM Prompts for Graph Extraction
-# Used by Response Processor to extract structured graph deltas from participant responses
 
 graph_extraction:
   system_prompt: |
-    You are a precise graph extraction system for marketing research interviews.
-    Your job is to extract structured information from consumer responses about products.
+    You extract graph information from interview responses.
+    You do not generate opinions, summaries, or explanations.
+    You detect specific concepts (nodes) and relationships (edges) from text.
 
-    EXTRACTION PHILOSOPHY - BALANCED APPROACH:
-    1. Extract EXPLICIT relationships stated by the participant (HIGH CONFIDENCE)
-    2. Extract STRONGLY IMPLIED relationships with clear causal language (MEDIUM CONFIDENCE)
-    3. Include confidence scores for each relationship (0.0-1.0)
-    4. Do NOT hallucinate or over-infer - when uncertain, mark as low confidence or skip
-    5. DISTINGUISH FEATURES FROM OUTCOMES:
-       - Attributes = static product features ("locally roasted", "affordable", "red packaging")
-       - Functional consequences = dynamic outcomes ("stays fresh", "saves money", "matches kitchen")
-       - Test: "Because of [attribute], I get [functional consequence]"
+    Your behavior is fully driven by the Schema Context provided to you:
+    - the schema defines VALID node types
+    - the schema defines VALID edge types
+    - the schema defines EXAMPLES of classification and extraction
+    - the schema defines how to interpret relationships
+    - the schema includes canonical patterns to follow
 
-    CAUSAL LANGUAGE MARKERS (indicate relationships):
-    - Direct: "because", "so", "therefore", "leads to", "causes", "results in"
-    - Implicit: "means", "that's why", "which is why", "enables me to"
-    - Sequential: "then", "after that", "which allows", "and so"
-    - Correlational: "goes with", "associated with", "related to", "comes with"
+    You must strictly follow the schema rules:
+    - Use ONLY node types defined in the schema
+    - Use ONLY edge types defined in the schema
+    - Use ONLY source/target type combinations that the schema declares valid
+    - Use examples to understand classification logic
 
-    CONFIDENCE SCORING GUIDELINES:
-    - 1.0: Explicitly stated ("A causes B", "A leads to B")
-    - 0.8-0.9: Strong causal language ("A, so B", "A means B", "A because B")
-    - 0.6-0.7: Implicit temporal/logical connection ("A, then B", "A allows B")
-    - 0.4-0.5: Weak association (proximity in text, correlational language)
-    - <0.4: Speculative (DO NOT extract these)
+    EXTRACTION PRINCIPLES:
+    1. Extract only what is present in the response.
+       - Explicitly stated concepts = high confidence (1.0)
+       - Strongly implied relationships = medium confidence
+       - Weak associations = low confidence or skip
 
-    IMPORTANT RULES:
-    1. Use the exact node and edge types defined in the schema
-    2. Include the exact quote that supports each extraction
-    3. Assign confidence scores to ALL edges based on guidelines above
-    4. Node confidence always 1.0 (nodes are explicitly mentioned)
-    5. If uncertain about a relationship, either give it low confidence (0.6-0.7) or skip it
+    2. Support every extraction with a direct quote.
+       - A quote is a substring from the response showing the concept or link.
+       - Do not paraphrase quotes; they must be exact.
 
-    You will receive:
-    - Schema Context: Valid node types, edge types, and extraction examples
-    - Recent Conversation: Last 2-3 turns for coreference resolution
-    - Participant Response: The text to analyze
+    3. Do not hallucinate:
+       - If a concept or relationship is not clearly supported, skip extraction.
+       - If uncertain about type mapping, return no node or edge for that part.
 
-    Output Format:
+    4. Merge with existing nodes when possible:
+       - If a concept is already present in the graph, reuse its label.
+       - Only create a new node if the schema examples do not match any existing node.
+
+    CONFIDENCE SCORING (edges only):
+    - 1.0: explicitly stated relationship (clear causal or defined pattern)
+    - 0.8: strong linkage following schema examples (e.g., clear pattern match)
+    - 0.6: implied relationship matching schema logic
+    - <0.6: too weak to extract — skip
+
+    IMPORTANT:
+    - Node confidence is not requested; nodes are extracted only when explicit or schema-supported.
+    - Do not infer nodes from mental states unless examples explicitly show how.
+
+    OUTPUT FORMAT:
     Return a JSON object with:
-    - nodes_added: Array of {type, label, quote}
-    - edges_added: Array of {type, source, target, quote}
+    - nodes_added: list of new nodes {type, label, quote}
+    - edges_added: list of new edges {type, source, target, quote, confidence}
 
   user_prompt_template: |
     # SCHEMA CONTEXT
@@ -55,43 +61,29 @@ graph_extraction:
     ## Edge Types
     {edge_types_description}
 
-    ## Existing Graph Nodes
+    # EXISTING GRAPH NODES
+    # Helps merging and prevents duplicates.
     {existing_nodes}
 
     # RECENT CONVERSATION
-
     {conversation_context}
 
-    # PARTICIPANT'S LATEST RESPONSE
-
+    # PARTICIPANT RESPONSE
     "{participant_response}"
 
     # EXTRACTION TASK
+    Extract the concepts and relationships present in the response using the schema examples as guidance.
 
-    Analyze the participant's response and extract:
-    1. **New Nodes**: Concepts mentioned that aren't in the existing graph
-       - Match to the defined node types
-       - CRITICAL: Distinguish attributes (FEATURES) from functional consequences (OUTCOMES)
-         * Attribute: "locally roasted" (WHERE/HOW it's made - a feature)
-         * Functional: "fresh beans" (RESULT of local roasting - an outcome)
-       - Create clear, descriptive labels (lowercase_with_underscores)
-       - Include the exact quote that supports each node
+    Rules:
+    1. Match node types based on schema definitions and examples.
+    2. Match edge types based on schema definitions, valid source/target types, and examples.
+    3. For existing concepts, reuse the existing node label.
+    4. Include exact quotes for each extraction.
+    5. Assign confidence scores to edges only.
 
-    2. **New Edges**: Relationships between nodes (existing or new)
-       - Extract both explicit and implicit relationships
-       - Match to the defined edge types (including same-level relationships like "correlates_with")
-       - Ensure source and target match valid types for the edge
-       - Include the quote that establishes the relationship
-       - IMPORTANT: Assign confidence score (0.0-1.0) based on causal language strength
+    Return JSON:
+    {{\n      \"nodes_added\": [...],\n      \"edges_added\": [...]\n    }}
 
-    Remember:
-    - Quality over quantity - extract only what's clearly there
-    - Use existing node labels when referring to already-mentioned concepts
-    - Empty extractions are OK if response adds no new graph information
-
-    Return your extraction as JSON.
-
-  # Function calling schema for structured output
   function_calling_schema:
     name: "extract_graph_delta"
     description: "Extract nodes and edges from participant response"
@@ -101,141 +93,32 @@ graph_extraction:
       properties:
         nodes_added:
           type: "array"
-          description: "New nodes to add to the graph"
           items:
             type: "object"
             required: ["type", "label", "quote"]
             properties:
               type:
                 type: "string"
-                description: "Node type from schema (e.g., 'attribute', 'value')"
               label:
                 type: "string"
-                description: "Descriptive label (lowercase_with_underscores)"
               quote:
                 type: "string"
-                description: "Exact quote from response supporting this node"
-
         edges_added:
           type: "array"
-          description: "New edges to add to the graph"
           items:
             type: "object"
             required: ["type", "source", "target", "quote", "confidence"]
             properties:
               type:
                 type: "string"
-                description: "Edge type from schema (e.g., 'leads_to', 'blocks', 'correlates_with')"
               source:
                 type: "string"
-                description: "Source node label (must exist or be in nodes_added)"
               target:
                 type: "string"
-                description: "Target node label (must exist or be in nodes_added)"
               quote:
                 type: "string"
-                description: "Quote from response establishing this relationship"
               confidence:
                 type: "number"
-                description: "Confidence score (0.0-1.0) based on causal language strength"
                 minimum: 0.0
                 maximum: 1.0
 
-  # Few-shot examples (optional, for better quality)
-  examples:
-    - input: "I like that it's affordable, so I can buy it every week without worrying about my budget."
-      output:
-        nodes_added:
-          - type: "attribute"
-            label: "affordable_price"
-            quote: "it's affordable"
-          - type: "functional_consequence"
-            label: "regular_purchase"
-            quote: "I can buy it every week"
-          - type: "psychosocial_consequence"
-            label: "financial_peace_of_mind"
-            quote: "without worrying about my budget"
-        edges_added:
-          - type: "leads_to"
-            source: "affordable_price"
-            target: "regular_purchase"
-            quote: "it's affordable, so I can buy it every week"
-            confidence: 0.9  # Strong causal language "so"
-          - type: "leads_to"
-            source: "regular_purchase"
-            target: "financial_peace_of_mind"
-            quote: "buy it every week without worrying about my budget"
-            confidence: 0.7  # Implicit connection (temporal sequence)
-
-    - input: "The packaging is really convenient - I can open it with one hand while holding my coffee."
-      output:
-        nodes_added:
-          - type: "attribute"
-            label: "convenient_packaging"
-            quote: "The packaging is really convenient"
-          - type: "functional_consequence"
-            label: "one_handed_opening"
-            quote: "I can open it with one hand"
-          - type: "attribute"
-            label: "morning_multitasking"
-            quote: "while holding my coffee"
-        edges_added:
-          - type: "enables"
-            source: "convenient_packaging"
-            target: "one_handed_opening"
-            quote: "The packaging is really convenient - I can open it with one hand"
-            confidence: 1.0  # Explicitly stated enablement
-
-    - input: "I like that it's locally roasted. It means the beans will be fresh and the coffee will be very aromatic."
-      output:
-        nodes_added:
-          - type: "attribute"
-            label: "locally_roasted"
-            quote: "it's locally roasted"
-            # NOTE: This is a FEATURE - where/how it's made
-          - type: "functional_consequence"
-            label: "fresh_beans"
-            quote: "beans will be fresh"
-            # NOTE: This is an OUTCOME - freshness results from local roasting
-          - type: "functional_consequence"
-            label: "aromatic_coffee"
-            quote: "coffee will be very aromatic"
-            # NOTE: This is an OUTCOME - aroma results from freshness
-        edges_added:
-          - type: "enables"
-            source: "locally_roasted"
-            target: "fresh_beans"
-            quote: "locally roasted. It means the beans will be fresh"
-            confidence: 0.8  # "means" is strong causal language
-          - type: "leads_to"
-            source: "fresh_beans"
-            target: "aromatic_coffee"
-            quote: "beans will be fresh and the coffee will be very aromatic"
-            confidence: 0.7  # Implicit connection ("and" suggests sequence)
-      explanation: |
-        Classification logic:
-        - "locally roasted" = attribute (feature of the product - WHERE/HOW it's made)
-        - "fresh beans" = functional_consequence (outcome enabled by local roasting)
-        - "aromatic coffee" = functional_consequence (outcome of freshness)
-
-        Edge logic:
-        - attribute → functional = "enables" (local roasting makes freshness possible)
-        - functional → functional = "leads_to" (freshness causes aroma)
-
-# Coreference Resolution Prompts (Phase 2 feature)
-coreference_resolution:
-  system_prompt: |
-    Help resolve ambiguous references in interview responses.
-    Participant may use pronouns like "it", "that", "this" without clear antecedents.
-    Your job is to identify what they're referring to based on conversation context.
-
-  user_prompt_template: |
-    Recent conversation:
-    {conversation_context}
-
-    Latest response contains: "{ambiguous_phrase}"
-
-    What is "{ambiguous_phrase}" most likely referring to?
-    Choose from: {candidate_nodes}
-
-    If uncertain, respond "unclear".

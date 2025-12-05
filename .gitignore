@@ -211,3 +211,5 @@ data/                 # Interview logs and outputs (don't commit)
 notebooks/            # Local experimentation (optional)
 *.jsonl               # Interview transcripts
 !.env.example         # Keep template, but not real .env
+archive*/
+legacy*

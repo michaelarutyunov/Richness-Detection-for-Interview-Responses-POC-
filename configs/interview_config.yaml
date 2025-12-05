@@ -1,0 +1,83 @@
+# Interview Configuration - Minimal Architecture
+# Only parameters that are actually used in the running codebase
+# Separated from codebase for easy configuration changes
+
+# ============================================================================
+# SECTION 1: INTERVIEW FLOW CONTROL
+# ============================================================================
+interview_flow:
+  # Turn management
+  max_turns: 20                    # Maximum number of interview turns
+  min_turns: 5                     # Minimum number of interview turns
+  
+  # Fallback behavior
+  enable_fallback: false           # Enable template fallback when LLM fails
+  fallback_questions:              # Fallback questions when LLM unavailable
+    - "Can you tell me more about that?"
+    - "What else comes to mind?"
+    - "How does that make you feel?"
+
+# ============================================================================
+# SECTION 2: GRAPH NEEDS DETECTION
+# ============================================================================
+graph_needs:
+  # Seed expansion triggers
+  min_nodes_for_seed_expansion: 4  # Minimum nodes before triggering seed expansion
+  
+  # Isolation detection
+  isolation_threshold: 0.1         # Nodes with <10% connections considered isolated
+  
+  # Depth completion triggers
+  depth_completion_threshold: 0.3  # Average depth below this triggers depth completion
+  target_depth: 5                  # Target depth for graph (ideal for means-end chains)
+  
+  # Dead-end detection
+  dead_end_threshold: 0.6          # Score threshold for dead-end detection
+  dead_end_probe_count: 3          # Grace period turns before dead-end trigger
+  
+  # Strategy selection weights
+  strategy_weights:
+    seed_expansion: 0.9            # Weight for seed expansion strategy
+    bridge_building: 0.7           # Weight for bridge building strategy
+    depth_completion: 0.6          # Weight for depth completion strategy
+
+# ============================================================================
+# SECTION 3: EXTRACTION SETTINGS
+# ============================================================================
+extraction:
+  # Confidence and validation
+  confidence_threshold: 0.6        # Minimum confidence for edge extraction
+  validation_stages: 2             # Structure + Schema validation stages
+  max_retries: 2                   # Maximum extraction retry attempts
+  
+  # History management
+  max_history_turns: 3             # Conversation history to include in prompts
+  existing_nodes_limit: 10         # Max existing nodes to show in prompts
+
+# ============================================================================
+# SECTION 4: TACTIC & QUESTION STRATEGY
+# ============================================================================
+tactic_selection:
+  # Scoring weights
+  usage_penalty_weight: 0.7        # Weight for tactic usage penalty
+  recency_penalty_weight: 0.15     # Weight for recency penalty
+  recency_penalty_cap: 0.5         # Maximum recency penalty
+  
+  # Recent history consideration
+  recent_tactics_count: 3           # Number of recent tactics to consider
+  recent_questions_count: 3         # Number of recent questions to check
+
+question_generation:
+  # Question strategy parameters (non-LLM specific)
+  max_question_length: 200         # Maximum question character length
+  
+  # Context selection (non-LLM specific)
+  context_weights:
+    visit_score: 0.7               # Weight for node visit frequency
+    recency_score: 0.3             # Weight for node recency
+
+# ============================================================================
+# SECTION 5: LOGGING & MONITORING
+# ============================================================================
+logging:
+  level: 

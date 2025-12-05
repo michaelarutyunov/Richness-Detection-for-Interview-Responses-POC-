@@ -18,11 +18,12 @@ This system uses AI to conduct natural, conversational interviews while construc
 
 ## ✨ Features
 
-- **Schema-driven knowledge graph construction** - Flexible YAML-based mental model definitions
+- **Schema-driven knowledge graph construction** - Flexible YAML-based mental model definitions (now v0.2 with enhanced extraction prompts)
+- **Advanced extraction prompts system** - New LLM prompts with confidence scoring and quote validation
 - **Dual LLM architecture** - Kimi K2 for fast extraction + Claude Sonnet for natural questions
 - **Real-time adaptive questioning** - Dynamically selects next question based on graph state
 - **Gradio 6 interface** - Clean, professional web UI
-- **YAML-based configuration** - Easy experimentation with different interview strategies
+- **YAML-based configuration** - Easy experimentation with different interview strategies and extraction prompts
 - **Minimal POC scope** - Phases 0-4 implemented for rapid validation
 
 ## 🚀 Quick Start
@@ -77,7 +78,7 @@ pip install -r requirements.txt
    KIMI_API_KEY=your_moonshot_api_key_here
    ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-   DEFAULT_SCHEMA=schemas/means_end_chain_v0.1.yaml
+   DEFAULT_SCHEMA=schemas/means_end_chain_v0.2.yaml
    DEFAULT_MODEL_CONFIG=configs/model_config.yaml
    LOG_LEVEL=INFO
    ```
@@ -118,7 +119,7 @@ Open your browser to `http://localhost:7860`
 │       └── gradio_app.py           # ✅ Gradio interface
 │
 ├── schemas/
-│   ├── means_end_chain_v0.1.yaml   # ✅ Means-End Chain schema
+│   ├── means_end_chain_v0.2.yaml   # ✅ Means-End Chain schema (v0.2)
 │   └── usage_script_v0.1.yaml      # ✅ Usage Script schema
 │
 ├── configs/
@@ -126,7 +127,7 @@ Open your browser to `http://localhost:7860`
 │   └── model_config.yaml           # ✅ LLM configuration
 │
 ├── prompts/
-│   ├── extraction_prompts.yaml     # ✅ Graph extraction prompts
+│   ├── extraction_prompts.yaml     # ✅ Enhanced v0.2 extraction prompts with confidence scoring
 │   └── question_templates.yaml     # ✅ Question templates
 │
 ├── tests/
@@ -144,7 +145,7 @@ Open your browser to `http://localhost:7860`
 
 ## 🧪 Schema Types
 
-### 1. Means-End Chain (`means_end_chain_v0.1.yaml`)
+### 1. Means-End Chain (`means_end_chain_v0.2.yaml`)
 
 Models consumer thinking as a vertical ladder of abstraction:
 
@@ -171,6 +172,34 @@ Models consumer experience as a temporal script:
 - → Action: "grabbed_from_fridge"
 - → Outcome: "hunger_satisfied"
 - → Emotion: "relief"
+
+## 🔄 Schema v0.2 Migration & Extraction Prompts
+
+### What's New in v0.2
+
+The system has migrated from **schema v0.1 to v0.2**, representing a major enhancement in how interview responses are processed:
+
+**Key Improvements:**
+- **Enhanced extraction prompts** - New LLM prompts in `prompts/extraction_prompts.yaml` provide more accurate concept and relationship extraction
+- **Structured extraction system** - Confidence-based extraction with direct quote support
+- **Schema-driven extraction** - Extraction behavior is now fully controlled by schema definitions
+- **Better node merging** - Intelligent duplicate detection and concept consolidation
+
+### New Extraction Prompts System
+
+Located in `prompts/extraction_prompts.yaml`, the new system provides:
+
+- **System prompts** - Define extraction behavior and rules for LLMs
+- **User prompt templates** - Context-aware prompts that include schema definitions
+- **Function calling schema** - Structured output format for reliable extraction
+- **Confidence scoring** - Edge confidence levels (0.6-1.0) for quality control
+
+### Migration Benefits
+
+- **More accurate extractions** - Better alignment with schema definitions
+- **Reduced hallucination** - Strict schema adherence prevents invalid extractions  
+- **Improved consistency** - Standardized extraction across different LLM providers
+- **Better quote support** - Every extraction includes supporting evidence
 
 ## 🎯 Implementation Phases
 
