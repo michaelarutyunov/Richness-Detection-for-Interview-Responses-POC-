@@ -29,15 +29,45 @@
 
 The AI Interview System v2 represents a complete architectural transformation from phase-driven to graph-driven interview orchestration, followed by a comprehensive cleanup to achieve ultra-clean architecture. The system analyzes the knowledge graph extracted from participant responses to identify structural needs and select questions that address the most valuable opportunities for graph improvement.
 
+### Recent Bug Fixes and Improvements
+
+**BUG-039 Fixed: Proper Turn Number Tracking**
+- **Issue**: Turn number was calculated from chat history instead of using InterviewState's built-in tracking
+- **Fix**: Implemented proper turn incrementing with `interview_state.increment_turn()` and persistent turn tracking
+- **Impact**: Ensures accurate turn-based logic for tactic selection and interview flow control
+
+**BUG-043 Fixed: API Connectivity Validation**
+- **Issue**: validate_provider_config only checked configuration format, not actual API connectivity
+- **Fix**: Added `_test_connectivity()` method to BaseLLMClient with actual API calls for validation
+- **Impact**: Users get configuration-time validation instead of runtime failures
+
+**BUG-040 Fixed: Real Token Counting**
+- **Issue**: Token counting used rough estimation (turn_number * 50) instead of actual usage
+- **Fix**: Added token tracking fields to InterviewState and implemented proper token usage collection from LLM responses
+- **Impact**: Accurate token usage monitoring for cost tracking and rate limiting
+
+**BUG-042 Fixed: Cache Utilization**
+- **Issue**: get_tactics_by_node_type called load_tactics() repeatedly instead of using cache
+- **Fix**: Modified to use self._tactics_cache for better performance
+- **Impact**: Reduced unnecessary tactic loading overhead
+
+**BUG-038 Fixed: Complete Configuration Summary**
+- **Issue**: get_config_summary returned incomplete view missing extraction, tactic_selection, question_generation sections
+- **Fix**: Expanded summary to include all major configuration sections
+- **Impact**: Better debugging and monitoring capabilities
+
 ### Key Capabilities
 
 - **Graph-First Logic**: Knowledge graph is the primary driver of question selection
 - **Structural Analysis**: Detects isolation, depth gaps, and coverage needs
 - **Strategic Intervention**: Maps structural needs to appropriate questioning strategies
-- **Safety-Constrained**: Respects emotional phases and usage limits as filters
-- **Configuration-Driven**: Behavior controlled through YAML configuration files
+- **Configuration-Driven**: Behavior controlled through YAML configuration files, including 
+  - *Methodological schema*: definitions of nodes, edges and inquery tactics aligned with a theoretical framework (e.g. means-end) 
+  - *Interview configuration*: parameters for graph building and question generation
+  - *LLM configuration*: extaction mechanism
+  - *Prompts*: graph extration and question prompts where methodological schema is plugged into
 - **Ultra-Clean Architecture**: Minimal, focused codebase with clear separation of concerns
-- **Multi-Provider LLM**: Support for Anthropic, OpenAI, Kimi, and DeepSeek
+- **Dual-Provider LLM**: Allows using different providers for graph extraction and question generation
 
 ### Clean Architecture Achievements
 
@@ -119,16 +149,13 @@ seed_expansion → seed_expansion
 
 **Filtering Process:**
 1. **Strategy Compatibility**: Filter tactics supporting the strategy
-2. **Safety Constraints**: Apply min_turn, max_visit_count, phase restrictions
-3. **Engagement Requirements**: Check engagement_level thresholds
-4. **Variety Scoring**: Penalize recently used tactics
-5. **Selection**: Choose highest-scoring valid tactic
+2. **Safety Constraints**: Apply min_turn, max_visit_count restrictions
+3. **Variety Scoring**: Penalize recently used tactics
+4. **Selection**: Choose highest-scoring valid tactic
 
 **Constraint Types:**
 - `min_turn`: Minimum turn number for tactic use
 - `max_visit_count`: Maximum usage per interview
-- `allowed_phases`: Phase-based restrictions
-- `requires_engagement`: Engagement level requirements
 
 ### Interview Pipeline
 
@@ -330,6 +357,25 @@ User Input → GraphDrivenOrchestrator → LLM Question Generator → Response D
 Graph Updates → Statistics Refresh → Visualization Update → Export Options
 ```
 
+#### Token Usage Tracking
+```python
+# Real token counting implementation
+token_usage = {
+    "total_tokens": interview_state.tokens_used,      # Actual tracked tokens
+    "prompt_tokens": interview_state.prompt_tokens,   # Prompt tokens only
+    "completion_tokens": interview_state.completion_tokens, # Completion tokens only
+    "llm_provider": self.llm_client.provider,
+    "questions_generated": interview_state.turn_number + 1
+}
+```
+
+**Token Tracking Flow:**
+1. **LLM Response**: Each LLM call returns usage data in `LLMResponse.usage`
+2. **Question Generation**: Tokens tracked when generating questions via `QuestionGenerator`
+3. **Concept Extraction**: Tokens tracked during response processing via `ResponseProcessor`
+4. **State Update**: `InterviewState.add_token_usage()` accumulates total usage
+5. **Display**: Real token counts shown in UI instead of estimates
+
 #### UI/UX Features
 - **Progressive Disclosure**: Information revealed as interview progresses
 - **Contextual Help**: Instructions and interpretation guides
@@ -367,11 +413,13 @@ GraphState(
 ```python
 InterviewState(
     session_id: str              # Unique session identifier
-    turn_number: int             # Current turn (0-indexed)
+    turn_number: int             # Current turn (0-indexed) - PROPERLY TRACKED
     phase: InterviewPhase        # Current emotional phase
     question_history: List[str]  # Previous questions
     tactic_usage: Dict[str, int] # Tactic usage tracking
-    engagement_level: float      # Participant engagement (0.0-1.0)
+    tokens_used: int             # Total tokens used across all turns
+    prompt_tokens: int           # Total prompt tokens
+    completion_tokens: int       # Total completion tokens
 )
 ```
 
@@ -383,8 +431,6 @@ Tactic(
     description: str             # Detailed description
     min_turn: int                # Minimum turn for use
     max_visit_count: int         # Maximum usage per interview
-    allowed_phases: List[InterviewPhase]  # Phase restrictions
-    requires_engagement: float   # Minimum engagement level
     templates: List[str]         # Question templates
     metadata: Dict[str, Any]     # Additional configuration
 )
@@ -448,13 +494,10 @@ Filter by strategy support
 Apply safety constraints:
     - min_turn check
     - max_visit_count check
-    - allowed_phases check
-    - requires_engagement check
     ↓
 Score for variety:
     - Usage count penalty
     - Recency penalty
-    - Novelty bonus
     ↓
 Select highest scoring tactic
     ↓
@@ -1195,3 +1238,96 @@ The graph-driven approach creates **more intentional, structural interviews** by
 - ✅ **HuggingFace Compatible**: Ready for Spaces deployment
 
 **Status: ✅ ULTRA-CLEAN PRODUCTION READY** - The system represents the absolute cleanest possible configuration architecture while maintaining 100% of production functionality. This provides a solid foundation for advanced interview capabilities with minimal complexity and maximum maintainability.
+
+---
+
+## Recent Bug Fixes and Improvements
+
+### ✅ **BUG-039 Fixed: Proper Turn Number Tracking**
+**Issue**: Turn number was calculated from chat history instead of using InterviewState's built-in tracking  
+**Fix**: Implemented proper turn incrementing with `interview_state.increment_turn()` and persistent turn tracking  
+**Impact**: Ensures accurate turn-based logic for tactic selection and interview flow control  
+
+**Implementation**: 
+- Added `interview_turn_tracker` to UI state management
+- Proper turn initialization (turn 0 for first question)
+- Consistent turn incrementing before each question generation
+- Eliminated fragile history-based calculation
+
+### ✅ **BUG-043 Fixed: API Connectivity Validation**
+**Issue**: `validate_provider_config` only checked configuration format, not actual API connectivity  
+**Fix**: Added `_test_connectivity()` method to BaseLLMClient with actual API calls for validation  
+**Impact**: Users get configuration-time validation instead of runtime failures  
+
+**Implementation**:
+```python
+async def _test_connectivity(self, test_message: str = "Hi") -> bool:
+    """Test API connectivity with lightweight call"""
+    response = await self.generate_completion(
+        messages=[{"role": "user", "content": test_message}]
+    )
+    return response is not None and len(response.content.strip()) > 0
+```
+
+### ✅ **BUG-040 Fixed: Real Token Counting**
+**Issue**: Token counting used rough estimation (turn_number * 50) instead of actual usage  
+**Fix**: Added token tracking fields to InterviewState and implemented proper token usage collection from LLM responses  
+**Impact**: Accurate token usage monitoring for cost tracking and rate limiting  
+
+**Implementation**:
+- Added `tokens_used`, `prompt_tokens`, `completion_tokens` to InterviewState
+- Token tracking in both question generation and concept extraction
+- Real token counts in UI instead of estimates
+
+### ✅ **BUG-042 Fixed: Cache Utilization**
+**Issue**: `get_tactics_by_node_type` called `load_tactics()` repeatedly instead of using cache  
+**Fix**: Modified to use `self._tactics_cache` for better performance  
+**Impact**: Reduced unnecessary tactic loading overhead  
+
+**Implementation**:
+```python
+def get_tactics_by_node_type(self, node_type: str) -> List[Tactic]:
+    if not self._tactics_cache:
+        self.load_tactics()
+    return [tactic for tactic in self._tactics_cache.values() 
+            if node_type in tactic.metadata.get("produces_node_types", [])]
+```
+
+### ✅ **BUG-038 Fixed: Complete Configuration Summary**
+**Issue**: `get_config_summary` returned incomplete view missing extraction, tactic_selection, question_generation sections  
+**Fix**: Expanded summary to include all major configuration sections  
+**Impact**: Better debugging and monitoring capabilities  
+
+**Implementation**: Enhanced `get_config_summary()` to return complete configuration overview including:
+- `interview_flow` (max_turns, min_turns, enable_fallback)
+- `graph_needs` (default_provider, target_depth, thresholds)
+- `extraction` (confidence_threshold, validation_stages, max_retries)
+- `tactic_selection` (usage_penalty_weight, recency_penalty_weight)
+- `question_generation` (max_question_length, context_weights)
+- `logging` (level, formats)
+
+### ✅ **Additional Improvements**
+
+**Factory Pattern for Extraction Orchestrator (BUG-049)**
+- Implemented `_create_extraction_orchestrator_for_interview()` factory method
+- Ensures proper state isolation between concurrent interviews
+- Prevents race conditions and shared state issues
+
+**Enhanced Label Validation (BUG-044)**
+- Improved error messages for missing vs empty labels
+- Added type checking and proper validation logic
+- Better user feedback during concept extraction
+
+**Context Manager for File Operations (BUG-048)**
+- Updated JSON export to use proper context managers
+- Ensures files are properly closed even on exceptions
+- More Pythonic resource management
+
+**Dead Code Removal (BUG-052)**
+- Removed unused `last_extraction_summary` references
+- Cleaner codebase with no unreachable code paths
+- Better maintainability
+
+---
+
+**Impact Summary**: These bug fixes significantly improve system reliability, performance, and user experience while maintaining the ultra-clean architecture principles. The system now provides accurate tracking, proper validation, and better error handling throughout the interview pipeline.

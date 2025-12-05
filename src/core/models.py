@@ -116,7 +116,23 @@ class GraphState(BaseModel):
             total_depth += depth
 
         return float(total_depth) / len(self.nodes)
-    
+
+    def get_node_depth(self, node_id: str) -> int:
+        """
+        Calculate depth of a specific node in the graph.
+
+        Args:
+            node_id: ID of the node to calculate depth for
+
+        Returns:
+            Depth of the node (0 for isolated nodes, higher for nodes with outgoing edges)
+
+        Note:
+            Uses depth-first search. For large graphs, consider NetworkX for optimization.
+        """
+        visited: Set[str] = set()
+        return self._calculate_node_depth(node_id, visited)
+
     def _calculate_node_depth(self, node_id: str, visited: Set[str], depth: int = 0) -> int:
         """Calculate depth from a given node using DFS."""
         if node_id in visited:
@@ -155,6 +171,11 @@ class InterviewState(BaseModel):
     emotional_state: str = "neutral"
     created_at: datetime = Field(default_factory=datetime.now)
     
+    # Token usage tracking
+    tokens_used: int = Field(ge=0, default=0)  # Total tokens used across all turns
+    prompt_tokens: int = Field(ge=0, default=0)  # Total prompt tokens
+    completion_tokens: int = Field(ge=0, default=0)  # Total completion tokens
+    
     def increment_turn(self) -> None:
         """Increment the turn number."""
         self.turn_number += 1
@@ -170,6 +191,16 @@ class InterviewState(BaseModel):
     def get_tactic_usage_count(self, tactic_id: str) -> int:
         """Get how many times a tactic has been used."""
         return self.tactic_usage.get(tactic_id, 0)
+    
+    def add_token_usage(self, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0) -> None:
+        """Add token usage from an LLM call to the interview state."""
+        if total_tokens > 0:
+            self.tokens_used += total_tokens
+        else:
+            self.tokens_used += prompt_tokens + completion_tokens
+        
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
 
 
 class SchemaTactic(BaseModel):
@@ -182,42 +213,49 @@ class SchemaTactic(BaseModel):
     produces_node_types: List[str] = Field(default_factory=list)
     valid_edge_types: List[str] = Field(default_factory=list)
     constraints: Dict[str, Any] = Field(default_factory=dict)
-    
+
     @property
     def min_turn(self) -> int:
         """Get minimum turn constraint."""
         return self.constraints.get("min_turn", 0)
-    
+
     @property
     def max_visit_count(self) -> int:
         """Get maximum visit count constraint."""
         return self.constraints.get("max_visit_count", 10)
 
+    # Compatibility properties for legacy Tactic interface
+    @property
+    def name(self) -> str:
+        """Readable name derived from ID (for legacy Tactic compatibility)."""
+        return self.id.replace("_", " ").title()
 
-class Tactic(BaseModel):
-    """
-    DEPRECATED: Legacy tactic model - use SchemaTactic instead.
+    @property
+    def description(self) -> str:
+        """Description (maps to intent for legacy Tactic compatibility)."""
+        return self.intent
 
-    This class exists for backward compatibility with code that expects the legacy
-    Tactic format. New code should use SchemaTactic directly from YAML schemas.
+    @property
+    def templates(self) -> List[str]:
+        """Question templates extracted from pattern (for legacy Tactic compatibility)."""
+        if self.pattern and isinstance(self.pattern, dict):
+            if "variants" in self.pattern:
+                return self.pattern["variants"]
+            elif "template" in self.pattern:
+                return [self.pattern["template"]]
+        return ["Tell me more about that."]
 
-    Migration path:
-    - SchemaTactics are loaded from YAML (schemas/means_end_chain_v*.yaml)
-    - Converted to Tactic via SchemaDrivenTacticLoader._convert_schema_tactic_to_tactic()
-    - Used throughout interview pipeline
-
-    TODO: Complete migration to SchemaTactic and remove this class.
-    See BUG-020 for details.
-    """
-    id: str
-    name: str
-    description: str = Field(default="", description="Description of the tactic")
-    min_turn: int = Field(ge=0, default=0)
-    max_visit_count: int = Field(ge=0, default=10)
-
-
-    templates: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Metadata dict containing all schema tactic fields (for legacy Tactic compatibility)."""
+        return {
+            "intent": self.intent,
+            "trigger": self.trigger,
+            "produces_node_types": self.produces_node_types,
+            "valid_edge_types": self.valid_edge_types,
+            "followups": self.followups,
+            "pattern": self.pattern
+        }
 
 
 class StrategyConfig(BaseModel):

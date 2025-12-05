@@ -8,6 +8,7 @@ Compatible with HuggingFace Spaces deployment.
 import logging
 import os
 from datetime import datetime
+from typing import Optional
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -99,6 +100,33 @@ class InterviewUI:
         except Exception as e:
             logger.warning(f"Could not initialize extraction components: {e}")
             self.extraction_orchestrator = None
+    
+    def _create_extraction_orchestrator_for_interview(self) -> Optional['GraphExtractionOrchestrator']:
+        """
+        Factory method to create a new extraction orchestrator instance for each interview.
+        
+        This prevents shared state issues by ensuring each interview gets its own
+        extraction orchestrator instance, while still using the same configuration
+        and components as the main UI instance.
+        
+        Returns:
+            New GraphExtractionOrchestrator instance or None if not configured
+        """
+        if not self.extraction_orchestrator:
+            return None
+        
+        try:
+            from src.interview.extraction import GraphExtractionOrchestrator
+            
+            # Create a new instance with the same configuration as the main instance
+            # This ensures isolation between interviews while reusing the same setup
+            return GraphExtractionOrchestrator(
+                response_processor=self.extraction_orchestrator.response_processor,
+                concept_extractor=self.extraction_orchestrator.concept_extractor
+            )
+        except Exception as e:
+            logger.warning(f"Could not create extraction orchestrator for interview: {e}")
+            return None
 
     async def start_interview_with_concept(
         self, concept_description: str
@@ -130,11 +158,7 @@ class InterviewUI:
             question_generator = QuestionGenerator(llm_client=self.llm_client)
             
             # Create orchestrator with extraction support
-            from src.interview.extraction import GraphExtractionOrchestrator
-            
-            extraction_orchestrator = None
-            if self.extraction_orchestrator:
-                extraction_orchestrator = self.extraction_orchestrator
+            extraction_orchestrator = self._create_extraction_orchestrator_for_interview()
             
             self.current_orchestrator = GraphDrivenOrchestrator(
                 question_generator=question_generator,
@@ -164,6 +188,10 @@ class InterviewUI:
                         )
                         logger.info(f"Applied {len(initial_delta.nodes_added)} initial seed concepts to graph")
                     
+                    # Set initial turn for first question (turn 0 for seed concept extraction)
+                    interview_state.turn_number = 0
+                    self.interview_turn_tracker = 0
+                    
                     # Generate first question based on extracted concepts
                     first_question = await self.current_orchestrator.next_question(
                         graph_state=self.current_graph_state,
@@ -187,6 +215,9 @@ class InterviewUI:
                     
                     if enable_fallback:
                         logger.info("Falling back to regular orchestration (fallback enabled in config)")
+                        # Set initial turn for fallback first question
+                        interview_state.turn_number = 0
+                        self.interview_turn_tracker = 0
                         first_question = await self.current_orchestrator.next_question(
                             graph_state=self.current_graph_state,
                             interview_state=interview_state,
@@ -200,6 +231,9 @@ class InterviewUI:
                         )
             else:
                 # No extraction available, use regular orchestration
+                # Set initial turn for first question without extraction
+                interview_state.turn_number = 0
+                self.interview_turn_tracker = 0
                 first_question = await self.current_orchestrator.next_question(
                     graph_state=self.current_graph_state,
                     interview_state=interview_state,
@@ -280,13 +314,19 @@ class InterviewUI:
 
         try:
             # Create proper graph state (persist across turns)
-            if not hasattr(self, 'current_graph_state') or self.current_graph_state is None:
+            if not hasattr(self, 'current_graph_state'):
                 self.current_graph_state = GraphState()
                 logger.info("Initialized new graph state for session")
             
-            # Create interview state
+            # Create interview state with proper turn tracking
             interview_state = InterviewState(session_id=self.current_session_id)
-            interview_state.turn_number = len([h for h in history if h["role"] == "assistant"])
+            # Set turn number based on actual interview progression, not chat history calculation
+            if hasattr(self, 'interview_turn_tracker'):
+                interview_state.turn_number = self.interview_turn_tracker
+            else:
+                # For existing sessions, estimate from history but track properly going forward
+                interview_state.turn_number = len([h for h in history if h["role"] == "assistant"])
+                self.interview_turn_tracker = interview_state.turn_number
             
             # Add previous questions to history
             for msg in history:
@@ -296,6 +336,10 @@ class InterviewUI:
 
             # Get recent conversation history for extraction context
             recent_history = history[-3:] if len(history) > 3 else history
+            
+            # Increment turn number for proper tracking (before generating next question)
+            interview_state.increment_turn()
+            self.interview_turn_tracker = interview_state.turn_number
             
             # Process response with concept extraction and generate next question
             next_question = await self.current_orchestrator.process_response(
@@ -322,17 +366,17 @@ class InterviewUI:
                 "provider": self.llm_client.provider if self.llm_client else "template"
             }
 
-            # Token usage from actual extraction
+            # Token usage from actual tracking (no longer estimated)
             token_usage = {
-                "total_tokens": getattr(interview_state, 'tokens_used', interview_state.turn_number * 50),
+                "total_tokens": interview_state.tokens_used,
+                "prompt_tokens": interview_state.prompt_tokens,
+                "completion_tokens": interview_state.completion_tokens,
                 "llm_provider": self.llm_client.provider if self.llm_client else "template",
                 "questions_generated": interview_state.turn_number + 1
             }
 
             # Create summary with extraction info
             summary = f"🆕 **This turn:** Generated 1 new question"
-            if hasattr(self, 'last_extraction_summary') and self.last_extraction_summary:
-                summary += f" | {self.last_extraction_summary}"
 
             # Get real visualization data
             new_nodes_data, new_edges_data = self._get_visualization_data(self.current_graph_state)
@@ -474,14 +518,13 @@ class InterviewUI:
                 }
             }
 
-            temp_file = tempfile.NamedTemporaryFile(
+            with tempfile.NamedTemporaryFile(
                 mode="w",
                 suffix=".json",
                 delete=False,
                 prefix=f"interview_{self.current_session_id}_",
-            )
-            json.dump(json_data, temp_file, indent=2)
-            temp_file.close()
+            ) as temp_file:
+                json.dump(json_data, temp_file, indent=2)
 
             logger.info(f"JSON export successful: {temp_file.name}")
             return temp_file.name

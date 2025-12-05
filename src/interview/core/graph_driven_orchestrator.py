@@ -4,7 +4,7 @@ GraphDrivenOrchestrator - Main orchestration pipeline for graph-driven interview
 
 import logging
 from typing import Optional, List, Dict, Any
-from src.core.models import GraphState, InterviewState, Tactic
+from src.core.models import GraphState, InterviewState, SchemaTactic
 from src.interview.core.graph_needs_detector import GraphNeedsDetector
 from src.interview.core.strategy_selector import StrategySelector
 from src.interview.tactics.selector import SchemaDrivenTacticSelector
@@ -107,6 +107,17 @@ class GraphDrivenOrchestrator:
             question = await self.question_generator.generate_question(
                 tactic, graph_state, interview_state
             )
+            
+            # Track token usage if LLM was used and returned usage data
+            if self.question_generator.llm_client and hasattr(self.question_generator, '_last_response'):
+                last_response = getattr(self.question_generator, '_last_response', None)
+                if last_response and last_response.usage:
+                    interview_state.add_token_usage(
+                        prompt_tokens=last_response.usage.get('prompt_tokens', 0),
+                        completion_tokens=last_response.usage.get('completion_tokens', 0),
+                        total_tokens=last_response.usage.get('total_tokens', 0)
+                    )
+                    logger.debug(f"Tracked token usage: {last_response.usage}")
             
             if not question:
                 logger.warning("Question generation failed for tactic: %s", tactic.id)
@@ -222,7 +233,7 @@ class GraphDrivenOrchestrator:
             "components_initialized": True
         }
     
-    def _track_depth_activity(self, interview_state: InterviewState, tactic: Tactic) -> None:
+    def _track_depth_activity(self, interview_state: InterviewState, tactic: SchemaTactic) -> None:
         """Track when depth exploration tactics are used for dead-end protection."""
         depth_tactics = ["value_ladder", "emotional_probe", "causal_value_link"]
         
@@ -236,7 +247,7 @@ class GraphDrivenOrchestrator:
         try:
             assert self.needs_detector is not None, "Needs detector not initialized"
             assert self.strategy_selector is not None, "Strategy selector not initialized"
-            assert self.tactic_selector is not None, "Tactic selector not initialized"
+            assert self.tactic_selector is not None, "SchemaTactic selector not initialized"
             
             logger.debug("All orchestrator components validated successfully")
             return True

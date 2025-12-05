@@ -5,7 +5,7 @@ Generates questions with configurable parameters instead of hardcoded values.
 
 import logging
 from typing import Optional, List, Dict, Any
-from src.core.models import Tactic, GraphState, InterviewState, Node
+from src.core.models import SchemaTactic, GraphState, InterviewState, Node
 from src.llm.client import BaseLLMClient, LLMResponse
 from src.llm.factory import LLMClientFactory
 from src.interview.question_generation.warmup_generator import WarmupGenerator
@@ -53,7 +53,7 @@ class ConfigurableQuestionGenerator:
     
     async def generate_question(
         self,
-        tactic: Tactic,
+        tactic: SchemaTactic,
         graph_state: GraphState,
         interview_state: InterviewState,
         context_node: Optional[Node] = None
@@ -99,7 +99,7 @@ class ConfigurableQuestionGenerator:
             logger.info("Falling back to configurable template generation")
             return self._generate_from_template_with_config(tactic, graph_state, context_node)
     
-    def _build_generation_context_with_config(self, tactic: Tactic, graph_state: GraphState, 
+    def _build_generation_context_with_config(self, tactic: SchemaTactic, graph_state: GraphState, 
                                             interview_state: InterviewState, context_node: Optional[Node]) -> Dict[str, Any]:
         """Build comprehensive context using configuration values."""
         context = {
@@ -178,7 +178,7 @@ class ConfigurableQuestionGenerator:
         
         return question
     
-    def _generate_from_template_with_config(self, tactic: Tactic, graph_state: GraphState, 
+    def _generate_from_template_with_config(self, tactic: SchemaTactic, graph_state: GraphState, 
                                           context_node: Optional[Node]) -> str:
         """Generate question from template using configuration values."""
         logger.debug("Using configurable template fallback")
@@ -194,7 +194,7 @@ class ConfigurableQuestionGenerator:
         # Fallback to basic question
         return "Can you tell me more about that?"
     
-    def _select_template_with_config(self, tactic: Tactic, graph_state: GraphState, 
+    def _select_template_with_config(self, tactic: SchemaTactic, graph_state: GraphState, 
                                    context_node: Optional[Node]) -> str:
         """Select template using configuration-aware logic."""
         if not tactic.templates:

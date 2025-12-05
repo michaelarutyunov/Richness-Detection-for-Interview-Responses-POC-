@@ -36,13 +36,22 @@ class LLMResponse:
 
 class BaseLLMClient(ABC):
     """Abstract base class for LLM providers."""
-    
-    def __init__(self, model: str, temperature: float = 0.7, max_tokens: int = 500):
-        """Initialize the LLM client."""
+
+    def __init__(self, model: str, temperature: float = 0.7, max_tokens: int = 500, provider: str = "unknown"):
+        """
+        Initialize the LLM client.
+
+        Args:
+            model: Model identifier
+            temperature: Sampling temperature (default: 0.7)
+            max_tokens: Maximum tokens to generate (default: 500)
+            provider: Provider name (default: "unknown")
+        """
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        logger.info(f"Initialized {self.__class__.__name__} with model: {model}")
+        self.provider = provider
+        logger.info(f"Initialized {self.__class__.__name__} with model: {model}, provider: {provider}")
     
     @abstractmethod
     async def generate_completion(
@@ -69,6 +78,59 @@ class BaseLLMClient(ABC):
         """Validate client configuration (API keys, etc.)."""
         pass
     
+    async def _test_connectivity(self, test_message: str = "Hi") -> bool:
+        """
+        Test API connectivity with a lightweight call.
+        
+        Args:
+            test_message: Simple message to send for connectivity test
+            
+        Returns:
+            True if API is reachable and functional
+        """
+        try:
+            response = await self.generate_completion(
+                messages=[{"role": "user", "content": test_message}],
+                system_prompt=None
+            )
+            return response is not None and len(response.content.strip()) > 0
+        except Exception as e:
+            logger.error(f"API connectivity test failed for {self.provider}: {e}")
+            return False
+    
+    def validate_config_with_connectivity(self) -> bool:
+        """
+        Validate configuration including API connectivity test.
+        
+        Returns:
+            True if configuration and connectivity are valid
+        """
+        # First do basic config validation
+        if not self.validate_config():
+            return False
+            
+        # Test API connectivity
+        try:
+            import asyncio
+            
+            # Run connectivity test in a new event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(self._test_connectivity())
+                if result:
+                    logger.info(f"{self.provider.title()} API connectivity validated successfully")
+                    return True
+                else:
+                    return False
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
+                
+        except Exception as e:
+            logger.error(f"{self.provider.title()} API connectivity test error: {e}")
+            return False
+    
     def _prepare_messages(self, messages: List[Dict[str, str]], system_prompt: Optional[str]) -> List[Dict[str, str]]:
         """Prepare messages for API call."""
         prepared_messages = []
@@ -85,9 +147,8 @@ class AnthropicClient(BaseLLMClient):
     
     def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", **kwargs):
         """Initialize Anthropic client."""
-        super().__init__(model, **kwargs)
+        super().__init__(model, provider="anthropic", **kwargs)
         self.api_key = api_key
-        self.provider = LLMProvider.ANTHROPIC
         
         # Import anthropic library only when needed
         try:
@@ -142,8 +203,8 @@ class AnthropicClient(BaseLLMClient):
             content = " ".join(content_parts) if content_parts else ""
 
             if not content:
-                logger.warning("No text content found in Anthropic response")
-                content = "Can you tell me more about that?"  # Fallback
+                logger.error("No text content in Anthropic response - possible safety filter")
+                raise ValueError("LLM returned empty response - cannot proceed")
             
             return LLMResponse(
                 content=content,
@@ -151,7 +212,7 @@ class AnthropicClient(BaseLLMClient):
                 model=self.model,
                 model_used=self.model,
                 latency_ms=0,  # Will be measured by caller
-                tokens_used=response.usage.input_tokens + response.usage.output_tokens if response.usage else 0
+                tokens_used=0 if response.usage is None else (response.usage.input_tokens + response.usage.output_tokens)
             )
             
         except Exception as e:
@@ -220,7 +281,7 @@ class AnthropicClient(BaseLLMClient):
                 model=self.model,
                 model_used=self.model,
                 latency_ms=latency_ms,
-                tokens_used=response.usage.input_tokens + response.usage.output_tokens if response.usage else 0,
+                tokens_used=0 if response.usage is None else (response.usage.input_tokens + response.usage.output_tokens),
                 function_call=function_call
             )
             
@@ -229,7 +290,7 @@ class AnthropicClient(BaseLLMClient):
             raise RuntimeError(f"Failed to generate completion with function calling: {e}")
     
     def validate_config(self) -> bool:
-        """Validate Anthropic configuration."""
+        """Validate Anthropic configuration (basic check - override for connectivity test)."""
         if not self.api_key:
             logger.error("Anthropic API key not provided")
             return False
@@ -239,6 +300,11 @@ class AnthropicClient(BaseLLMClient):
             return False
         
         return True
+    
+    def validate_config_with_connectivity(self) -> bool:
+        """Validate Anthropic configuration including API connectivity test."""
+        # Use the base class method for connectivity testing
+        return super().validate_config_with_connectivity()
 
 
 class DeepSeekClient(BaseLLMClient):
@@ -250,7 +316,7 @@ class DeepSeekClient(BaseLLMClient):
         self.base_url = base_url or "https://api.deepseek.com/v1"
         # Only pass temperature and max_tokens to base class
         base_kwargs = {k: v for k, v in kwargs.items() if k in ['temperature', 'max_tokens']}
-        super().__init__(model, **base_kwargs)
+        super().__init__(model, provider="deepseek", **base_kwargs)
         self.api_key = api_key
         self.provider = LLMProvider.DEEPSEEK
         
@@ -287,18 +353,18 @@ class DeepSeekClient(BaseLLMClient):
             
             # Extract response content
             content = response.choices[0].message.content if response.choices else ""
-            
+
             return LLMResponse(
                 content=content,
                 provider=self.provider.value,
                 model=self.model,
                 usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens
+                    "prompt_tokens": 0 if response.usage is None else response.usage.prompt_tokens,
+                    "completion_tokens": 0 if response.usage is None else response.usage.completion_tokens,
+                    "total_tokens": 0 if response.usage is None else response.usage.total_tokens
                 }
             )
-            
+
         except Exception as e:
             logger.error(f"DeepSeek API error: {e}")
             raise RuntimeError(f"Failed to generate completion: {e}")
@@ -321,9 +387,8 @@ class OpenAIClient(BaseLLMClient):
     
     def __init__(self, api_key: str, model: str = "gpt-4", **kwargs):
         """Initialize OpenAI client."""
-        super().__init__(model, **kwargs)
+        super().__init__(model, provider="openai", **kwargs)
         self.api_key = api_key
-        self.provider = LLMProvider.OPENAI
         
         try:
             import openai
@@ -355,24 +420,24 @@ class OpenAIClient(BaseLLMClient):
             
             # Extract response content
             content = response.choices[0].message.content if response.choices else ""
-            
+
             return LLMResponse(
                 content=content,
                 provider=self.provider.value,
                 model=self.model,
                 usage={
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens
+                    "prompt_tokens": 0 if response.usage is None else response.usage.prompt_tokens,
+                    "completion_tokens": 0 if response.usage is None else response.usage.completion_tokens,
+                    "total_tokens": 0 if response.usage is None else response.usage.total_tokens
                 }
             )
-            
+
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             raise RuntimeError(f"Failed to generate completion: {e}")
     
     def validate_config(self) -> bool:
-        """Validate OpenAI configuration."""
+        """Validate OpenAI configuration (basic check - override for connectivity test)."""
         if not self.api_key:
             logger.error("OpenAI API key not provided")
             return False
@@ -382,6 +447,11 @@ class OpenAIClient(BaseLLMClient):
             return False
         
         return True
+    
+    def validate_config_with_connectivity(self) -> bool:
+        """Validate OpenAI configuration including API connectivity test."""
+        # Use the base class method for connectivity testing
+        return super().validate_config_with_connectivity()
 
 
 class KimiClient(BaseLLMClient):
@@ -393,7 +463,7 @@ class KimiClient(BaseLLMClient):
         self.base_url = base_url or "https://api.moonshot.cn/v1"
         # Only pass temperature and max_tokens to base class
         base_kwargs = {k: v for k, v in kwargs.items() if k in ['temperature', 'max_tokens']}
-        super().__init__(model, **base_kwargs)
+        super().__init__(model, provider="kimi", **base_kwargs)
         self.api_key = api_key
         self.provider = LLMProvider.KIMI
         
@@ -445,9 +515,9 @@ class KimiClient(BaseLLMClient):
                 provider=self.provider.value,
                 model=self.model,
                 usage={
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-                    "total_tokens": response.usage.total_tokens if response.usage else 0
+                    "prompt_tokens": 0 if response.usage is None else response.usage.prompt_tokens,
+                    "completion_tokens": 0 if response.usage is None else response.usage.completion_tokens,
+                    "total_tokens": 0 if response.usage is None else response.usage.total_tokens
                 }
             )
             

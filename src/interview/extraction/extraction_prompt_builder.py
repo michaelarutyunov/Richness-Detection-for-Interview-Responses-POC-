@@ -24,92 +24,28 @@ class ExtractionPromptBuilder:
         logger.info(f"Initialized ExtractionPromptBuilder with schema: {schema_path}, prompts: {prompts_path}")
     
     def _load_extraction_prompts(self) -> dict:
-        """Load extraction prompts from YAML file."""
+        """Load extraction prompts from YAML file. Fails if file not found or malformed."""
         if not self.prompts_path.exists():
-            logger.warning(f"Extraction prompts file not found: {self.prompts_path}, using defaults")
-            return self._get_default_extraction_prompts()
-        
+            raise FileNotFoundError(
+                f"CRITICAL: Extraction prompts file not found: {self.prompts_path}. "
+                f"System cannot operate without properly configured prompts."
+            )
+
         try:
             with open(self.prompts_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f)
+                prompts = yaml.safe_load(f)
+                if not prompts:
+                    raise ValueError(f"Extraction prompts file is empty: {self.prompts_path}")
+                return prompts
+        except yaml.YAMLError as e:
+            raise ValueError(
+                f"CRITICAL: Malformed extraction prompts file: {self.prompts_path}. "
+                f"YAML parsing error: {e}"
+            ) from e
         except Exception as e:
-            logger.error(f"Error loading extraction prompts: {e}, using defaults")
-            return self._get_default_extraction_prompts()
-    
-    def _get_default_extraction_prompts(self) -> dict:
-        """Default extraction prompts when file is not available."""
-        return {
-            "graph_extraction": {
-                "system_prompt": """You extract graph information from interview responses.
-You do not generate opinions, summaries, or explanations.
-You detect specific concepts (nodes) and relationships (edges) from text.
-
-Your behavior is fully driven by the Schema Context provided to you.
-Use ONLY node types, edge types, and examples defined in the schema.
-
-EXTRACTION PRINCIPLES:
-1. Extract only what is present in the response
-2. Support every extraction with a direct quote
-3. Do not hallucinate - skip uncertain extractions
-4. Merge with existing nodes when possible
-
-Return JSON with nodes_added and edges_added.""",
-                "user_prompt_template": """# SCHEMA CONTEXT
-{node_types_description}
-{edge_types_description}
-
-# EXISTING GRAPH NODES
-{existing_nodes}
-
-# RECENT CONVERSATION
-{conversation_context}
-
-# PARTICIPANT RESPONSE
-\"{participant_response}\"
-
-# EXTRACTION TASK
-Extract concepts and relationships using the schema examples as guidance.
-
-Return JSON:
-{"nodes_added": [...], "edges_added": [...]}""",
-                "function_calling_schema": {
-                    "name": "extract_graph_delta",
-                    "description": "Extract nodes and edges from participant response",
-                    "parameters": {
-                        "type": "object",
-                        "required": ["nodes_added", "edges_added"],
-                        "properties": {
-                            "nodes_added": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "required": ["type", "label", "quote"],
-                                    "properties": {
-                                        "type": {"type": "string"},
-                                        "label": {"type": "string"},
-                                        "quote": {"type": "string"}
-                                    }
-                                }
-                            },
-                            "edges_added": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "required": ["type", "source", "target", "quote", "confidence"],
-                                    "properties": {
-                                        "type": {"type": "string"},
-                                        "source": {"type": "string"},
-                                        "target": {"type": "string"},
-                                        "quote": {"type": "string"},
-                                        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+            raise RuntimeError(
+                f"CRITICAL: Failed to load extraction prompts from {self.prompts_path}: {e}"
+            ) from e
     
     def _create_base_prompt(self) -> str:
         """Create base system prompt using the new extraction prompts format."""
@@ -188,8 +124,9 @@ Remember: Use ONLY these defined types and follow the extraction principles."""
         if not existing_nodes:
             return "(no existing concepts)"
         
-        # Limit to avoid prompt bloat
-        max_nodes = 10
+        # Limit to avoid prompt bloat while maintaining sufficient context
+        # Increased from 10 to 50 to reduce duplicate extractions in large graphs
+        max_nodes = 50
         if len(existing_nodes) > max_nodes:
             nodes = existing_nodes[:max_nodes-1] + [f"... and {len(existing_nodes) - max_nodes + 1} more"]
         else:

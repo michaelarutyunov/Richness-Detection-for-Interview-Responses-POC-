@@ -3,9 +3,11 @@ Response Processor for extracting concepts from participant responses.
 Streamlined single-stage extraction with essential validation only.
 """
 
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from pydantic import ValidationError
 
 from src.core.extraction_models import (
     ExtractedNode, ExtractedEdge, GraphDelta, ExtractionMetadata, ExtractionResult
@@ -70,14 +72,19 @@ class ResponseProcessor:
                 return self._create_empty_result(turn_number, start_time, "No extraction")
             
             raw_extraction = llm_response.function_call.get("arguments", {}) if llm_response.function_call else {}
-            
+
+            # Validate expected keys and log if format is unexpected
+            if raw_extraction and "nodes_added" not in raw_extraction and "nodes" not in raw_extraction:
+                logger.error(f"Unexpected LLM response format. Keys: {list(raw_extraction.keys())}")
+                logger.debug(f"Full response: {raw_extraction}")
+
             # Transform extraction format to match validator expectations
             # The LLM returns nodes_added/edges_added, but validator expects nodes/edges
             transformed_extraction = {
-                "nodes": raw_extraction.get("nodes_added", []),
-                "edges": raw_extraction.get("edges_added", [])
+                "nodes": raw_extraction.get("nodes_added", raw_extraction.get("nodes", [])),
+                "edges": raw_extraction.get("edges_added", raw_extraction.get("edges", []))
             }
-            
+
             # Use transformed extraction for validation
             raw_extraction = transformed_extraction
             
@@ -97,32 +104,46 @@ class ResponseProcessor:
                        f"({result.metadata.latency_ms}ms, {result.metadata.tokens_used} tokens)")
             
             return result
-            
+
+        except asyncio.TimeoutError as e:
+            logger.error(f"LLM request timeout: {e}")
+            # Re-raise to allow orchestrator to retry with different provider
+            raise
+        except ValidationError as e:
+            logger.error(f"Extraction validation failed: {e}")
+            return self._create_error_result(turn_number, start_time, f"Validation error: {e}")
         except Exception as e:
-            logger.error(f"Response processing failed: {e}", exc_info=True)
-            return self._create_error_result(turn_number, start_time, str(e))
+            logger.error(f"Unexpected error in response processing: {e}", exc_info=True)
+            # Re-raise unexpected errors for visibility
+            raise
     
     async def _call_llm_with_retry(self, messages: List[dict], function_schema: dict) -> Optional[LLMResponse]:
-        """Call LLM with simple retry logic."""
+        """Call LLM with retry logic that distinguishes failure modes."""
         max_retries = 2
-        
+        last_error = None
+
         for attempt in range(max_retries):
             try:
                 response = await self.llm.generate_completion_with_function_call(
                     messages=messages,
                     function_schema=function_schema
                 )
+
                 if response and response.function_call:
                     return response
-                
-                logger.warning(f"Attempt {attempt + 1}: No function call returned")
-                
+
+                # Empty response - should retry
+                logger.warning(f"Attempt {attempt + 1}/{max_retries}: No function call returned, retrying...")
+                last_error = "No function call in response"
+                continue  # Explicitly continue to next attempt
+
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                if attempt == max_retries - 1:
-                    logger.error(f"All LLM attempts failed after {max_retries} tries")
-                    return None
-        
+                logger.warning(f"Attempt {attempt + 1}/{max_retries}: API error: {e}")
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    continue  # Retry on API errors
+
+        logger.error(f"All {max_retries} attempts failed. Last error: {last_error}")
         return None
     
     def _build_extraction_result(self, validated_extraction: dict, turn_number: int,
@@ -164,11 +185,26 @@ class ResponseProcessor:
         
         # Build metadata
         latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+        
+        # Extract token usage from LLM response
+        tokens_used = 0
+        if llm_response:
+            # Use tokens_used field if available, otherwise calculate from usage dict
+            if llm_response.tokens_used > 0:
+                tokens_used = llm_response.tokens_used
+            elif llm_response.usage:
+                # Calculate from usage dict (prompt_tokens + completion_tokens)
+                tokens_used = llm_response.usage.get('prompt_tokens', 0) + llm_response.usage.get('completion_tokens', 0)
+                # If total_tokens is available, use that instead
+                if 'total_tokens' in llm_response.usage:
+                    tokens_used = llm_response.usage['total_tokens']
+        
         metadata = ExtractionMetadata(
-            model_used=llm_response.model_used if llm_response else "unknown",
+            model_used="unknown" if llm_response is None else llm_response.model_used,
             latency_ms=latency_ms,
-            tokens_used=llm_response.tokens_used if llm_response else 0,
-            validation_errors=validation_errors
+            tokens_used=tokens_used,
+            validation_errors=validation_errors,
+            extraction_timestamp=start_time  # Pass actual start time for accuracy
         )
         
         return ExtractionResult(
@@ -178,16 +214,17 @@ class ResponseProcessor:
             error_message=None if len(validation_errors) == 0 else "; ".join(validation_errors)
         )
     
-    def _create_empty_result(self, turn_number: int, start_time: datetime, 
+    def _create_empty_result(self, turn_number: int, start_time: datetime,
                            reason: str) -> ExtractionResult:
         """Create empty extraction result."""
         latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-        
+
         return ExtractionResult(
             delta=GraphDelta(),
             metadata=ExtractionMetadata(
                 latency_ms=latency_ms,
-                validation_errors=[reason]
+                validation_errors=[reason],
+                extraction_timestamp=start_time
             ),
             success=False,
             error_message=reason
@@ -197,12 +234,13 @@ class ResponseProcessor:
                            error_message: str) -> ExtractionResult:
         """Create error extraction result."""
         latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-        
+
         return ExtractionResult(
             delta=GraphDelta(),
             metadata=ExtractionMetadata(
                 latency_ms=latency_ms,
-                validation_errors=["Processing error"]
+                validation_errors=["Processing error"],
+                extraction_timestamp=start_time
             ),
             success=False,
             error_message=error_message

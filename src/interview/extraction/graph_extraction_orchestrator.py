@@ -93,14 +93,21 @@ class GraphExtractionOrchestrator:
         """
         applied_nodes = []
         applied_edges = []
+        validation_bugs = []  # Track validation bugs (missing node references)
         
         # Add nodes to graph
         for extracted_node in delta.nodes_added:
             node_id = extracted_node.label
             
-            # Skip if node already exists
+            # Update existing node with new quote if node already exists
             if node_id in current_graph.nodes:
-                logger.debug(f"Node {node_id} already exists, skipping")
+                existing_node = current_graph.nodes[node_id]
+                # Append new supporting quote if it's unique and non-empty
+                if extracted_node.quote and extracted_node.quote not in existing_node.source_quotes:
+                    existing_node.source_quotes.append(extracted_node.quote)
+                    logger.info(f"Added new quote to existing node: {node_id}")
+                else:
+                    logger.debug(f"Node {node_id} already exists with same quote, skipping")
                 continue
             
             # Create new node
@@ -121,20 +128,72 @@ class GraphExtractionOrchestrator:
         # Add edges to graph
         for extracted_edge in delta.edges_added:
             edge_id = f"{extracted_edge.source}-{extracted_edge.type}-{extracted_edge.target}"
-            
-            # Skip if edge already exists
+
+            # Update existing edge with better evidence
             if edge_id in current_graph.edges:
-                logger.debug(f"Edge {edge_id} already exists, skipping")
+                existing_edge = current_graph.edges[edge_id]
+                updated = False
+
+                # Update confidence if new evidence is stronger
+                if extracted_edge.confidence > existing_edge.confidence:
+                    old_confidence = existing_edge.confidence
+                    existing_edge.confidence = extracted_edge.confidence
+                    logger.info(f"Updated edge {edge_id} confidence: {old_confidence:.2f} -> {extracted_edge.confidence:.2f}")
+                    updated = True
+
+                # Append new supporting quote if it's unique and non-empty
+                if extracted_edge.quote and extracted_edge.quote != existing_edge.source_quote:
+                    # Check if quote is already in existing quote (to avoid duplicates)
+                    if extracted_edge.quote not in existing_edge.source_quote:
+                        existing_edge.source_quote = existing_edge.source_quote + " | " + extracted_edge.quote
+                        logger.debug(f"Appended new quote to edge {edge_id}")
+                        updated = True
+
+                if updated:
+                    logger.debug(f"Edge {edge_id} updated with new evidence")
+                else:
+                    logger.debug(f"Edge {edge_id} already exists with same or better evidence, skipping")
                 continue
             
             # Verify nodes exist (should be guaranteed by validation)
+            # If missing, create placeholder nodes to preserve edges that passed validation
             if extracted_edge.source not in current_graph.nodes:
-                logger.warning(f"Source node {extracted_edge.source} not found, skipping edge")
-                continue
-                
+                logger.error(f"VALIDATION BUG: Edge {edge_id} passed validation but source '{extracted_edge.source}' not in graph")
+                logger.info(f"Creating placeholder node for '{extracted_edge.source}' to preserve edge")
+                placeholder_node = Node(
+                    id=extracted_edge.source,
+                    label=extracted_edge.source,
+                    type="unknown",
+                    creation_turn=turn_number,
+                    source_quotes=["[Node added as placeholder for edge preservation]"]
+                )
+                current_graph.add_node(placeholder_node)
+                # Track validation bug for metrics
+                validation_bugs.append({
+                    "edge": edge_id,
+                    "missing_node": extracted_edge.source,
+                    "node_type": "source",
+                    "reason": "Source node not in graph despite passing validation"
+                })
+
             if extracted_edge.target not in current_graph.nodes:
-                logger.warning(f"Target node {extracted_edge.target} not found, skipping edge")
-                continue
+                logger.error(f"VALIDATION BUG: Edge {edge_id} passed validation but target '{extracted_edge.target}' not in graph")
+                logger.info(f"Creating placeholder node for '{extracted_edge.target}' to preserve edge")
+                placeholder_node = Node(
+                    id=extracted_edge.target,
+                    label=extracted_edge.target,
+                    type="unknown",
+                    creation_turn=turn_number,
+                    source_quotes=["[Node added as placeholder for edge preservation]"]
+                )
+                current_graph.add_node(placeholder_node)
+                # Track validation bug for metrics
+                validation_bugs.append({
+                    "edge": edge_id,
+                    "missing_node": extracted_edge.target,
+                    "node_type": "target",
+                    "reason": "Target node not in graph despite passing validation"
+                })
             
             # Create new edge
             edge = Edge(
@@ -153,16 +212,23 @@ class GraphExtractionOrchestrator:
             logger.debug(f"Added edge: {edge_id} ({extracted_edge.type}, confidence: {extracted_edge.confidence})")
         
         # Return delta with only actually applied changes
+        metadata = {
+            "applied_nodes": len(applied_nodes),
+            "applied_edges": len(applied_edges),
+            "skipped_nodes": len(delta.nodes_added) - len(applied_nodes),
+            "skipped_edges": len(delta.edges_added) - len(applied_edges),
+            "turn_number": turn_number
+        }
+
+        # Add validation bugs to metadata if any occurred
+        if validation_bugs:
+            metadata["validation_bugs"] = validation_bugs
+            logger.warning(f"Found {len(validation_bugs)} validation bugs in this extraction")
+
         return GraphDelta(
             nodes_added=applied_nodes,
             edges_added=applied_edges,
-            metadata={
-                "applied_nodes": len(applied_nodes),
-                "applied_edges": len(applied_edges),
-                "skipped_nodes": len(delta.nodes_added) - len(applied_nodes),
-                "skipped_edges": len(delta.edges_added) - len(applied_edges),
-                "turn_number": turn_number
-            }
+            metadata=metadata
         )
     
     async def extract_initial_concepts(self, concept_description: str) -> GraphDelta:

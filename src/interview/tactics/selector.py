@@ -5,7 +5,7 @@ Uses schema-defined strategies and tactics instead of separate configuration fil
 
 import logging
 from typing import List, Optional, Dict, Any
-from src.core.models import StrategyName, InterviewState, Tactic
+from src.core.models import StrategyName, InterviewState, SchemaTactic
 from src.core.schema_loader import SchemaLoader
 from src.interview.tactics.loader import SchemaDrivenTacticLoader
 
@@ -18,14 +18,38 @@ class SchemaDrivenTacticSelector:
     Works directly with the unified schema format.
     """
     
-    def __init__(self, schema_loader: Optional[SchemaLoader] = None):
-        """Initialize with schema loader."""
+    def __init__(
+        self,
+        schema_loader: Optional[SchemaLoader] = None,
+        usage_penalty_weight: float = 0.7,
+        recency_penalty_weight: float = 0.15,
+        recency_penalty_cap: float = 0.5,
+        recent_tactics_count: int = 3,
+        recent_questions_count: int = 6
+    ):
+        """
+        Initialize with configuration parameters.
+
+        Args:
+            schema_loader: Schema loader instance (optional)
+            usage_penalty_weight: Weight for usage frequency penalty (default: 0.7)
+            recency_penalty_weight: Weight for recency penalty (default: 0.15)
+            recency_penalty_cap: Maximum recency penalty (default: 0.5)
+            recent_tactics_count: Number of recent tactics to track (default: 3)
+            recent_questions_count: Number of recent questions to track (default: 6)
+        """
         self.schema_loader = schema_loader or SchemaLoader()
         self.tactic_loader = SchemaDrivenTacticLoader(self.schema_loader)
-        logger.info("SchemaDrivenTacticSelector initialized")
+        self.usage_penalty_weight = usage_penalty_weight
+        self.recency_penalty_weight = recency_penalty_weight
+        self.recency_penalty_cap = recency_penalty_cap
+        self.recent_tactics_count = recent_tactics_count
+        self.recent_questions_count = recent_questions_count
+        logger.info("SchemaDrivenTacticSelector initialized with usage_penalty_weight=%.2f, recency_penalty_weight=%.2f",
+                   usage_penalty_weight, recency_penalty_weight)
     
     def select(self, strategy: StrategyName, interview_state: InterviewState, 
-               available_tactics: List[Tactic]) -> Optional[Tactic]:
+               available_tactics: List[SchemaTactic]) -> Optional[SchemaTactic]:
         """
         Select the best tactic for the given strategy and state.
         
@@ -67,7 +91,7 @@ class SchemaDrivenTacticSelector:
             logger.warning(f"No tactics passed constraint filters for strategy: {strategy.value}")
             return None
         
-        # Score tactics for variety and engagement
+        # Score tactics for variety
         scored_tactics = self._score_tactics(valid_tactics, interview_state)
         
         # Select highest-scoring tactic
@@ -88,7 +112,7 @@ class SchemaDrivenTacticSelector:
         
         return strategy_def.tactics
     
-    def _apply_constraints(self, tactics: List[Tactic], interview_state: InterviewState) -> List[Tactic]:
+    def _apply_constraints(self, tactics: List[SchemaTactic], interview_state: InterviewState) -> List[SchemaTactic]:
         """Apply safety constraint filters to tactics."""
         valid_tactics = []
         
@@ -112,7 +136,7 @@ class SchemaDrivenTacticSelector:
         
         return valid_tactics
     
-    def _score_tactics(self, tactics: List[Tactic], interview_state: InterviewState) -> List[tuple]:
+    def _score_tactics(self, tactics: List[SchemaTactic], interview_state: InterviewState) -> List[tuple]:
         """Score tactics based on variety and other factors."""
         scored_tactics = []
         
@@ -131,7 +155,7 @@ class SchemaDrivenTacticSelector:
             score = max(0.0, score)
             
             scored_tactics.append((tactic, score))
-            logger.debug(f"Tactic {tactic.id} scored: {score:.2f} (usage: {usage_count}, recency penalty: {recency_penalty:.2f})")
+            logger.debug(f"SchemaTactic {tactic.id} scored: {score:.2f} (usage: {usage_count}, recency penalty: {recency_penalty:.2f})")
         
         return scored_tactics
     
@@ -147,10 +171,10 @@ class SchemaDrivenTacticSelector:
         # Cap penalty to avoid completely eliminating tactics
         return min(penalty, 0.5)
 
-    def _log_tactic_selection(self, strategy: StrategyName, selected_tactic: Tactic, 
+    def _log_tactic_selection(self, strategy: StrategyName, selected_tactic: SchemaTactic, 
                              scored_tactics: List[tuple], interview_state: InterviewState) -> None:
         """Log the tactic selection decision with rationale."""
-        logger.debug("Tactic selection details:")
+        logger.debug("SchemaTactic selection details:")
         logger.debug(f"  Strategy: {strategy.value}")
         logger.debug(f"  Selected: {selected_tactic.id} (score: {max(scored_tactics, key=lambda x: x[1])[1]:.2f})")
         logger.debug("  All scored tactics:")
@@ -180,12 +204,10 @@ class SchemaDrivenTacticSelector:
         }
         return default_priorities.get(strategy, 0.5)
     
-    def get_tactic_constraints(self, tactic: Tactic) -> Dict[str, Any]:
+    def get_tactic_constraints(self, tactic: SchemaTactic) -> Dict[str, Any]:
         """Get constraint information for a tactic."""
         return {
             "min_turn": tactic.min_turn,
             "max_visit_count": tactic.max_visit_count,
-
-
             "schema_metadata": self.tactic_loader.get_tactic_metadata(tactic.id)
         }

@@ -213,3 +213,4 @@ notebooks/            # Local experimentation (optional)
 !.env.example         # Keep template, but not real .env
 archive*/
 legacy*
+interim*

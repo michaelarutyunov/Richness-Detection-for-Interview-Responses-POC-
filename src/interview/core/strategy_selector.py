@@ -26,9 +26,15 @@ class StrategySelector:
         NeedName.SEED_EXPANSION: StrategyName.SEED_EXPANSION,
     }
     
-    def __init__(self):
-        """Initialize the strategy selector."""
-        logger.info("StrategySelector initialized with hardcoded mappings")
+    def __init__(self, dead_end_threshold: float = 0.6):
+        """
+        Initialize the strategy selector with configuration.
+
+        Args:
+            dead_end_threshold: Score threshold above which dead-end is detected (default: 0.6)
+        """
+        self.dead_end_threshold = dead_end_threshold
+        logger.info("StrategySelector initialized with dead_end_threshold=%.2f", dead_end_threshold)
         logger.debug("Need to strategy mapping: %s", self.NEED_TO_STRATEGY_MAP)
     
     def select(self, needs: List[Need], graph_state: GraphState, interview_state: InterviewState) -> StrategyName:
@@ -69,8 +75,9 @@ class StrategySelector:
             graph_state, interview_state
         )
         
-        if dead_end_score >= 0.6:  # Threshold for stalling detection
-            logger.info("Dead-end detected (score: %.2f), using resolution strategy", dead_end_score)
+        if dead_end_score >= self.dead_end_threshold:  # Use configured threshold
+            logger.info("Dead-end detected (score: %.2f >= threshold: %.2f), using resolution strategy",
+                       dead_end_score, self.dead_end_threshold)
             return StrategyName.DEAD_END_RESOLUTION
         
         # Step 3: Safety fallback - no needs, no dead-end

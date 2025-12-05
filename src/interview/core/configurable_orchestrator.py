@@ -5,7 +5,7 @@ Replaces hardcoded values with configuration-driven behavior.
 
 import logging
 from typing import Optional, List, Dict, Any
-from src.core.models import GraphState, InterviewState, Tactic
+from src.core.models import GraphState, InterviewState, SchemaTactic
 from src.interview.core.graph_needs_detector import GraphNeedsDetector
 from src.interview.core.strategy_selector import StrategySelector
 from src.interview.tactics.selector import SchemaDrivenTacticSelector
@@ -69,14 +69,7 @@ class ConfigurableGraphDrivenOrchestrator:
     
     def _create_configured_needs_detector(self) -> GraphNeedsDetector:
         """Create GraphNeedsDetector with configuration values."""
-        return GraphNeedsDetector(
-            min_nodes_for_seed_expansion=self.config.graph_needs.min_nodes_for_seed_expansion,
-            isolation_threshold=self.config.graph_needs.isolation_threshold,
-            depth_completion_threshold=self.config.graph_needs.depth_completion_threshold,
-            target_depth=self.config.graph_needs.target_depth,
-            dead_end_threshold=self.config.graph_needs.dead_end_threshold,
-            dead_end_probe_count=self.config.graph_needs.dead_end_probe_count
-        )
+        return GraphNeedsDetector(config=self.config.graph_needs)
     
     def _create_configured_strategy_selector(self) -> StrategySelector:
         """Create StrategySelector with configuration values."""

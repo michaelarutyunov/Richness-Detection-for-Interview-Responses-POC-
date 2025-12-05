@@ -55,18 +55,20 @@ class ConceptExtractor:
             # Validate extracted concepts
             validated = self.validator.validate_extraction(extraction, concept_description)
             
-            # Convert to ExtractedNode objects
+            # Convert to ExtractedNode objects with Pydantic validation
             nodes = []
             for node_data in validated.get("nodes", []):
                 if len(nodes) >= max_concepts:
                     break
-                    
-                node = ExtractedNode(
-                    type=node_data.get("type", "attribute"),  # Default to attribute
-                    label=node_data.get("label", ""),
-                    quote=node_data.get("quote", concept_description[:100])
-                )
-                nodes.append(node)
+
+                try:
+                    # Use Pydantic validation for type safety
+                    node = ExtractedNode.model_validate(node_data)
+                    nodes.append(node)
+                except Exception as e:
+                    logger.warning(f"Node failed Pydantic validation, skipping: {e}")
+                    logger.debug(f"Invalid node data: {node_data}")
+                    continue
             
             logger.info(f"Extracted {len(nodes)} seed concepts")
             return nodes
@@ -125,9 +127,21 @@ Return JSON array:
                 nodes = []
                 for concept in concepts:
                     if isinstance(concept, dict):
+                        # Schema-agnostic: skip nodes with missing required fields
+                        node_type = concept.get("type")
+                        node_label = concept.get("label", "")
+
+                        if not node_type:
+                            logger.warning(f"Skipping node with missing type: label='{node_label}'")
+                            continue
+
+                        if not node_label:
+                            logger.warning(f"Skipping node with missing label: type='{node_type}'")
+                            continue
+
                         nodes.append({
-                            "type": concept.get("type", "attribute"),
-                            "label": concept.get("label", ""),
+                            "type": node_type,
+                            "label": node_label,
                             "quote": concept.get("description", "")
                         })
                 
@@ -135,7 +149,8 @@ Return JSON array:
             
         except (json.JSONDecodeError, Exception) as e:
             logger.warning(f"Failed to parse concept extraction JSON: {e}")
-        
+            logger.debug(f"Failed content (first 500 chars): {content[:500]}")
+
         # Fallback: return empty extraction
         return {"nodes": [], "edges": []}
     

@@ -4,7 +4,7 @@ Replaces hardcoded values with configuration-driven behavior.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.core.models import GraphState, Need, NeedName, InterviewState
 from src.config.interview_config_loader import InterviewConfig
 

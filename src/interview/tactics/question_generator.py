@@ -4,7 +4,7 @@ LLM-based Question Generator - Creates natural interview questions using languag
 
 import logging
 from typing import Optional, List, Dict, Any
-from src.core.models import Tactic, GraphState, InterviewState, Node
+from src.core.models import SchemaTactic, GraphState, InterviewState, Node
 from src.llm.client import BaseLLMClient, LLMResponse
 from src.llm.factory import LLMClientFactory
 from src.interview.question_generation.warmup_generator import WarmupGenerator
@@ -29,11 +29,12 @@ class QuestionGenerator:
         """Initialize the question generator with LLM client."""
         self.llm_client = llm_client
         self.warmup_generator = WarmupGenerator(llm_client=llm_client) if llm_client else None
+        self._last_response = None  # Store last LLM response for token tracking
         logger.info(f"QuestionGenerator initialized with {type(llm_client).__name__ if llm_client else 'fallback templates'}")
     
     async def generate_question(
         self,
-        tactic: Tactic,
+        tactic: SchemaTactic,
         graph_state: GraphState,
         interview_state: InterviewState,
         context_node: Optional[Node] = None
@@ -68,6 +69,9 @@ class QuestionGenerator:
             
             # Generate question using LLM
             response = await self.llm_client.generate_completion(messages)
+            
+            # Store response for token tracking
+            self._last_response = response
             
             # Post-process the generated question
             question = self._post_process_question(response.content, context)
@@ -125,7 +129,7 @@ class QuestionGenerator:
     
     def _build_generation_context(
         self,
-        tactic: Tactic,
+        tactic: SchemaTactic,
         graph_state: GraphState,
         interview_state: InterviewState,
         context_node: Optional[Node]
@@ -289,7 +293,7 @@ Guidelines:
         logger.debug(f"Post-processed question: {question}")
         return question
     
-    def _generate_from_template(self, tactic: Tactic, graph_state: GraphState, context_node: Optional[Node]) -> str:
+    def _generate_from_template(self, tactic: SchemaTactic, graph_state: GraphState, context_node: Optional[Node]) -> str:
         """Generate question using basic template interpolation (fallback)."""
         logger.debug(f"Using template fallback for tactic: {tactic.id}")
         

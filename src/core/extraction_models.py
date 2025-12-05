@@ -4,8 +4,9 @@ Streamlined version of legacy models for improved performance.
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
+import re
 
 
 class ExtractedNode(BaseModel):
@@ -13,6 +14,18 @@ class ExtractedNode(BaseModel):
     type: str = Field(description="Node type from schema (e.g., 'attribute', 'value')")
     label: str = Field(description="Descriptive label (lowercase_with_underscores)")
     quote: str = Field(description="Exact quote from response supporting this node")
+
+    @field_validator('label')
+    @classmethod
+    def validate_label_format(cls, v: str) -> str:
+        """Validate label follows lowercase_with_underscores format."""
+        if not v:
+            raise ValueError("Label cannot be empty")
+        if not re.match(r'^[a-z_][a-z0-9_]{2,39}$', v):
+            raise ValueError(
+                f"Label must be lowercase_with_underscores (3-40 chars, alphanumeric + underscore): '{v}'"
+            )
+        return v
 
 
 class ExtractedEdge(BaseModel):

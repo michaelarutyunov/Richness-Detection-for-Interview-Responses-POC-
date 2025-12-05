@@ -93,9 +93,9 @@ class ExtractionValidator:
         # Stage 2: Schema validation
         raw_nodes = extraction.get("nodes", [])
         raw_edges = extraction.get("edges", [])
-        
-        valid_nodes, node_errors = self._validate_nodes(raw_nodes)
-        valid_edges, edge_errors = self._validate_edges(raw_edges, valid_nodes)
+
+        valid_nodes, node_errors, rejected_nodes = self._validate_nodes(raw_nodes)
+        valid_edges, edge_errors = self._validate_edges(raw_edges, valid_nodes, rejected_nodes)
         
         errors.extend(node_errors)
         errors.extend(edge_errors)
@@ -157,36 +157,58 @@ class ExtractionValidator:
         
         return len(errors) == 0, errors
     
-    def _validate_nodes(self, nodes: List[dict]) -> tuple[List[dict], List[str]]:
-        """Stage 2: Validate node types and formats."""
+    def _validate_nodes(self, nodes: List[dict]) -> tuple[List[dict], List[str], Dict[str, str]]:
+        """Stage 2: Validate node types and formats.
+
+        Returns:
+            Tuple of (valid_nodes, errors, rejected_nodes)
+            rejected_nodes is a dict mapping label -> rejection_reason
+        """
         valid_nodes = []
         errors = []
+        rejected_nodes = {}  # Track rejected nodes with their rejection reasons
         
         for i, node in enumerate(nodes):
             try:
                 # Validate node type
                 node_type = node.get("type", "")
                 if node_type not in self.node_types:
+                    # Track rejection if label exists
+                    if "label" in node:
+                        rejected_nodes[node["label"]] = f"Invalid type '{node_type}'"
                     errors.append(f"Node {i}: Invalid type '{node_type}'")
                     continue
-                
+
                 # Validate label format using regex if available
-                label = node.get("label", "")
-                if not label:
-                    errors.append(f"Node {i}: Empty label")
+                if "label" not in node:
+                    errors.append(f"Node {i}: Missing label field")
                     continue
-                
-                # Check regex pattern if defined
+
+                label = node["label"]
+                if not isinstance(label, str) or not label.strip():
+                    rejected_nodes[str(label)] = "Empty or invalid label"
+                    errors.append(f"Node {i}: Empty or invalid label")
+                    continue
+
+                # Check regex pattern if defined, with auto-normalization
                 node_type_config = self.node_types[node_type]
                 if "validation_regex" in node_type_config:
                     pattern = node_type_config["validation_regex"]
-                    if not re.match(pattern, label):
-                        errors.append(f"Node {i}: Label '{label}' doesn't match pattern '{pattern}'")
+                    # Auto-normalize label: lowercase and replace spaces with underscores
+                    normalized_label = label.lower().replace(" ", "_")
+                    if not re.match(pattern, normalized_label):
+                        rejected_nodes[label] = f"Label doesn't match pattern '{pattern}' (even after normalization)"
+                        errors.append(f"Node {i}: Label '{label}' (normalized: '{normalized_label}') doesn't match pattern '{pattern}'")
                         continue
-                
+                    # Update node with normalized label if it was changed
+                    if normalized_label != label:
+                        logger.debug(f"Normalized label '{label}' to '{normalized_label}'")
+                        node["label"] = normalized_label
+
                 # Validate quote exists
                 quote = node.get("quote", "")
                 if not quote:
+                    rejected_nodes[node["label"]] = "Missing quote"
                     errors.append(f"Node {i}: Missing quote")
                     continue
                 
@@ -194,16 +216,29 @@ class ExtractionValidator:
                 valid_nodes.append(node)
                 
             except Exception as e:
+                if "label" in node:
+                    rejected_nodes[node["label"]] = f"Validation error - {str(e)}"
                 errors.append(f"Node {i}: Validation error - {str(e)}")
                 continue
-        
-        return valid_nodes, errors
+
+        return valid_nodes, errors, rejected_nodes
     
-    def _validate_edges(self, edges: List[dict], valid_nodes: List[dict]) -> tuple[List[dict], List[str]]:
-        """Stage 2: Validate edge types and references."""
+    def _validate_edges(self, edges: List[dict], valid_nodes: List[dict], rejected_nodes: Dict[str, str] = None) -> tuple[List[dict], List[str]]:
+        """Stage 2: Validate edge types and references.
+
+        Args:
+            edges: List of edge dictionaries to validate
+            valid_nodes: List of valid nodes from node validation
+            rejected_nodes: Dict mapping rejected node labels to rejection reasons
+
+        Returns:
+            Tuple of (valid_edges, errors)
+        """
         valid_edges = []
         errors = []
-        
+        if rejected_nodes is None:
+            rejected_nodes = {}
+
         # Build set of valid node labels for quick lookup
         valid_labels = {node.get("label", "") for node in valid_nodes}
         
@@ -220,31 +255,42 @@ class ExtractionValidator:
                 # Validate source and target exist
                 source = edge.get("source", "")
                 target = edge.get("target", "")
-                
+
+                # Check source node with diagnostic information
                 if source not in valid_labels:
-                    errors.append(f"Edge {i}: Source node '{source}' not found in valid nodes")
+                    if source in rejected_nodes:
+                        errors.append(f"Edge {i}: Source node '{source}' was rejected ({rejected_nodes[source]})")
+                    else:
+                        errors.append(f"Edge {i}: Source node '{source}' not found in extraction")
                     continue
-                
+
+                # Check target node with diagnostic information
                 if target not in valid_labels:
-                    errors.append(f"Edge {i}: Target node '{target}' not found in valid nodes")
+                    if target in rejected_nodes:
+                        errors.append(f"Edge {i}: Target node '{target}' was rejected ({rejected_nodes[target]})")
+                    else:
+                        errors.append(f"Edge {i}: Target node '{target}' not found in extraction")
                     continue
                 
                 # Validate edge constraints (source/target type compatibility)
                 if self._should_validate_edge_constraints():
                     source_node = next((n for n in valid_nodes if n.get("label") == source), None)
                     target_node = next((n for n in valid_nodes if n.get("label") == target), None)
-                    
-                    if source_node and target_node:
+
+                    # Validate constraints even if nodes not fully found (already validated existence above)
+                    valid_sources = edge_config.get("valid_sources", [])
+                    valid_targets = edge_config.get("valid_targets", [])
+
+                    # Validate source node type constraint
+                    if source_node:
                         source_type = source_node.get("type", "")
-                        target_type = target_node.get("type", "")
-                        
-                        valid_sources = edge_config.get("valid_sources", [])
-                        valid_targets = edge_config.get("valid_targets", [])
-                        
                         if valid_sources and source_type not in valid_sources:
                             errors.append(f"Edge {i}: Source type '{source_type}' not valid for edge type '{edge_type}'")
                             continue
-                        
+
+                    # Validate target node type constraint
+                    if target_node:
+                        target_type = target_node.get("type", "")
                         if valid_targets and target_type not in valid_targets:
                             errors.append(f"Edge {i}: Target type '{target_type}' not valid for edge type '{edge_type}'")
                             continue
