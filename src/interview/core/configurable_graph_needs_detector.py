@@ -1,5 +1,5 @@
 """
-Configurable GraphNeedsDetector - Uses interview configuration from YAML.
+Configurable Graph Needs Detector - Uses interview configuration from YAML.
 Replaces hardcoded values with configuration-driven behavior.
 """
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigurableGraphNeedsDetector:
     """
-    Configurable GraphNeedsDetector that uses interview settings from YAML.
+    Configurable Graph Needs Detector that uses interview settings from YAML.
     
     This detector replaces hardcoded values with configuration-driven behavior,
     making graph needs detection truly configurable.

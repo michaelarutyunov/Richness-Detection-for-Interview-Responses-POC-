@@ -20,9 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from src.core.models import GraphState, InterviewState, Node, Edge
 from src.core.schema_loader import SchemaLoader
-from src.interview.core.graph_driven_orchestrator import GraphDrivenOrchestrator
+from src.interview.core.configurable_orchestrator import ConfigurableGraphDrivenOrchestrator
 from src.interview.tactics.loader import SchemaDrivenTacticLoader
-from src.interview.core.graph_needs_detector import GraphNeedsDetector
+from src.interview.core.configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
 from src.interview.core.strategy_selector import StrategySelector
 
 # Configure logging
@@ -39,10 +39,37 @@ async def test_complete_workflow():
     try:
         # Initialize all components
         logger.info("1. Initializing components...")
-        orchestrator = GraphDrivenOrchestrator()
+        
+        # Create configurable needs detector with default config first
+        from src.config.interview_config_loader import InterviewConfigLoader
+        config_loader = InterviewConfigLoader()
+        config = config_loader.load_config()
+        needs_detector = ConfigurableGraphNeedsDetector(config)
+        
+        # Create configurable orchestrator with proper dependencies
+        from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
+        from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor
+        
+        # Create a mock extraction orchestrator for testing
+        llm_client = None  # Will use template mode
+        schema_path = "schemas/means_end_chain_v0.2.yaml"
+        prompt_builder = ExtractionPromptBuilder(schema_path)
+        validator = ExtractionValidator(schema_path)
+        response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
+        concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+        
+        extraction_orchestrator = GraphExtractionOrchestrator(
+            response_processor=response_processor,
+            concept_extractor=concept_extractor
+        )
+        
+        orchestrator = ConfigurableGraphDrivenOrchestrator(
+            extraction_orchestrator=extraction_orchestrator,
+            config_loader=config_loader
+        )
         tactic_loader = SchemaDrivenTacticLoader()
-        needs_detector = GraphNeedsDetector()
-        strategy_selector = StrategySelector()
+        
+        strategy_selector = StrategySelector(config=config)
         
         # Create initial states
         logger.info("2. Creating initial states...")
@@ -108,13 +135,13 @@ async def test_complete_workflow():
         
         # Step 4: Test needs detection on updated graph
         logger.info("7. Testing needs detection...")
-        needs = needs_detector.detect(graph_state)
+        needs = needs_detector.detect_productive_needs(graph_state)
         logger.info(f"✓ Detected needs: {[str(need) for need in needs]}")
         
         # Step 5: Test strategy selection
         logger.info("8. Testing strategy selection...")
         if needs:
-            selected_strategy = strategy_selector.select(needs)
+            selected_strategy = strategy_selector.select(needs, graph_state, interview_state)
             logger.info(f"✓ Selected strategy: {selected_strategy}")
         
         # Step 6: Test schema integration

@@ -2,7 +2,7 @@
 
 **Project:** AI Interview System v2 - Graph-Driven Orchestrator
 **Last Updated:** 2025-12-05
-**Status:** Ultra-Clean Production Ready
+**Status:** Ultra-Clean Production Ready - Post QuestionGenerator Migration
 
 ---
 
@@ -29,49 +29,25 @@
 
 The AI Interview System v2 represents a complete architectural transformation from phase-driven to graph-driven interview orchestration, followed by a comprehensive cleanup to achieve ultra-clean architecture. The system analyzes the knowledge graph extracted from participant responses to identify structural needs and select questions that address the most valuable opportunities for graph improvement.
 
-### Recent Bug Fixes and Improvements
-
-**BUG-039 Fixed: Proper Turn Number Tracking**
-- **Issue**: Turn number was calculated from chat history instead of using InterviewState's built-in tracking
-- **Fix**: Implemented proper turn incrementing with `interview_state.increment_turn()` and persistent turn tracking
-- **Impact**: Ensures accurate turn-based logic for tactic selection and interview flow control
-
-**BUG-043 Fixed: API Connectivity Validation**
-- **Issue**: validate_provider_config only checked configuration format, not actual API connectivity
-- **Fix**: Added `_test_connectivity()` method to BaseLLMClient with actual API calls for validation
-- **Impact**: Users get configuration-time validation instead of runtime failures
-
-**BUG-040 Fixed: Real Token Counting**
-- **Issue**: Token counting used rough estimation (turn_number * 50) instead of actual usage
-- **Fix**: Added token tracking fields to InterviewState and implemented proper token usage collection from LLM responses
-- **Impact**: Accurate token usage monitoring for cost tracking and rate limiting
-
-**BUG-042 Fixed: Cache Utilization**
-- **Issue**: get_tactics_by_node_type called load_tactics() repeatedly instead of using cache
-- **Fix**: Modified to use self._tactics_cache for better performance
-- **Impact**: Reduced unnecessary tactic loading overhead
-
-**BUG-038 Fixed: Complete Configuration Summary**
-- **Issue**: get_config_summary returned incomplete view missing extraction, tactic_selection, question_generation sections
-- **Fix**: Expanded summary to include all major configuration sections
-- **Impact**: Better debugging and monitoring capabilities
-
 ### Key Capabilities
 
 - **Graph-First Logic**: Knowledge graph is the primary driver of question selection
 - **Structural Analysis**: Detects isolation, depth gaps, and coverage needs
 - **Strategic Intervention**: Maps structural needs to appropriate questioning strategies
-- **Configuration-Driven**: Behavior controlled through YAML configuration files, including 
-  - *Methodological schema*: definitions of nodes, edges and inquery tactics aligned with a theoretical framework (e.g. means-end) 
-  - *Interview configuration*: parameters for graph building and question generation
-  - *LLM configuration*: extaction mechanism
-  - *Prompts*: graph extration and question prompts where methodological schema is plugged into
+- **Configuration-Driven Question Generation**: Single ConfigurableQuestionGenerator with YAML-driven parameters
+  - Temperature, max_tokens, context_weights all externalized
+  - LLM provider selection through configuration
+  - Fallback templates for graceful degradation
 - **Ultra-Clean Architecture**: Minimal, focused codebase with clear separation of concerns
+- **Complete Configuration System**: All behavior controlled through YAML files:
+  - *Methodological schema*: definitions of nodes, edges and inquiry tactics aligned with theoretical frameworks (e.g. means-end)
+  - *Interview configuration*: parameters for graph building and question generation
+  - *LLM configuration*: extraction mechanism with provider-agnostic specs
+  - *Prompts*: graph extraction and question prompts where methodological schema is integrated
 - **Dual-Provider LLM**: Allows using different providers for graph extraction and question generation
 
 ### Clean Architecture Achievements
 
-- **84% File Reduction**: 212 → 33 files while maintaining full functionality
 - **Configuration Consolidation**: All behavior in 2 main YAML files
 - **Modular Design**: Clear component separation with single responsibilities
 - **Production Ready**: Minimal footprint with maximum capability
@@ -112,7 +88,7 @@ Centralized domain models defining the system's data structures:
 - `get_density()` - Measures graph connectivity
 - `get_nodes_by_type()` - Type-based node filtering
 
-#### GraphNeedsDetector (`src/interview/graph_needs_detector.py`)
+#### ConfigurableGraphNeedsDetector (`src/interview/core/configurable_graph_needs_detector.py`)
 
 **Purpose**: Analyzes GraphState to identify structural improvement opportunities
 
@@ -159,13 +135,13 @@ seed_expansion → seed_expansion
 
 ### Interview Pipeline
 
-#### GraphDrivenOrchestrator (`src/interview/graph_driven_orchestrator.py`)
+#### ConfigurableGraphDrivenOrchestrator (`src/interview/configurable_orchestrator.py`)
 
-**Purpose**: Main orchestrator implementing the graph-driven pipeline
+**Purpose**: Main orchestrator implementing the graph-driven pipeline with YAML configuration support
 
 **Pipeline Flow:**
 ```
-GraphState → GraphNeedsDetector → StrategySelector → TacticSelector → QuestionGenerator
+GraphState → ConfigurableGraphNeedsDetector → StrategySelector → TacticSelector → ConfigurableQuestionGenerator
 ```
 
 **Key Methods:**
@@ -197,6 +173,43 @@ GraphState → GraphNeedsDetector → StrategySelector → TacticSelector → Qu
 - `before_after` - Temporal comparisons
 - `emotional_turning_point` - Pivotal moments
 - `vulnerability` - Deep emotional exploration
+
+#### ConfigurableQuestionGenerator (`src/interview/tactics/configurable_question_generator.py`)
+
+**Purpose**: Generates natural interview questions using LLM with full configuration support
+
+**Architecture**: Replaces legacy QuestionGenerator with configuration-driven approach
+
+**Key Features:**
+- **Configuration-Driven**: All parameters (temperature, max_tokens, context_weights) from YAML config
+- **LLM Integration**: Creates LLM client from configuration if not provided
+- **Fallback Templates**: Graceful degradation when LLM unavailable
+- **Context-Aware**: Considers graph state, interview history, and tactic requirements
+- **Post-Processing**: Length limits, formatting, and validation
+
+**Configuration Integration:**
+```yaml
+question_generation:
+  max_question_length: 200         # Question length limits
+  context_weights:                 # Node selection weights
+    visit_score: 0.7
+    recency_score: 0.3
+  temperature: 0.7                 # LLM creativity setting
+  max_tokens: 300                  # Response length limit
+```
+
+**Generation Pipeline:**
+1. **Context Building**: Compile graph state, interview history, tactic requirements
+2. **Prompt Creation**: Build system and user prompts with configuration context
+3. **LLM Generation**: Generate question using configured provider and parameters
+4. **Post-Processing**: Apply length limits, formatting, and validation
+5. **Fallback**: Use templates if LLM generation fails
+
+**Migration from QuestionGenerator:**
+- Complete removal of legacy QuestionGenerator class
+- All functionality preserved and enhanced through configuration
+- Single source of truth for question generation behavior
+- Backward compatibility maintained through configuration defaults
 
 ### Configuration System (Clean Architecture)
 
@@ -352,7 +365,7 @@ export_buttons = gr.Button(label="Download Results")
 
 #### UI Event Flow
 ```
-User Input → GraphDrivenOrchestrator → LLM Question Generator → Response Display
+User Input → ConfigurableGraphDrivenOrchestrator → LLM Question Generator → Response Display
     ↓
 Graph Updates → Statistics Refresh → Visualization Update → Export Options
 ```
@@ -371,7 +384,7 @@ token_usage = {
 
 **Token Tracking Flow:**
 1. **LLM Response**: Each LLM call returns usage data in `LLMResponse.usage`
-2. **Question Generation**: Tokens tracked when generating questions via `QuestionGenerator`
+2. **Question Generation**: Tokens tracked when generating questions via `ConfigurableQuestionGenerator`
 3. **Concept Extraction**: Tokens tracked during response processing via `ResponseProcessor`
 4. **State Update**: `InterviewState.add_token_usage()` accumulates total usage
 5. **Display**: Real token counts shown in UI instead of estimates
@@ -449,7 +462,7 @@ GraphUpdater (existing - not implemented in v2)
     ↓
 GraphState (updated with new nodes/edges)
     ↓
-GraphNeedsDetector.detect()
+ConfigurableGraphNeedsDetector.detect_productive_needs()
     ↓
 List[Need] (prioritized by score)
     ↓
@@ -461,7 +474,7 @@ TacticSelector.select(strategy, interview_state, tactics)
     ↓
 Tactic (selected tactic)
     ↓
-QuestionGenerator (template interpolation)
+ConfigurableQuestionGenerator (template interpolation)
     ↓
 String (final question)
 ```
@@ -525,8 +538,7 @@ Return Tactic or None
 | **Tactics & Questions** | | | |
 | TacticLoader | `interview/tactics/loader.py` | ✅ ACTIVE | Loads tactics from YAML configuration |
 | TacticSelector | `interview/tactics/selector.py` | ✅ ACTIVE | Selects tactics based on config and constraints |
-| QuestionGenerator | `interview/tactics/question_generator.py` | ✅ ACTIVE | Generates questions using LLM |
-| ConfigurableQuestionGenerator | `interview/tactics/configurable_question_generator.py` | ✅ ACTIVE | Configurable question generation |
+| ConfigurableQuestionGenerator | `interview/tactics/configurable_question_generator.py` | ✅ ACTIVE | Configuration-driven question generation with LLM integration |
 | WarmupGenerator | `interview/question_generation/warmup_generator.py` | ✅ ACTIVE | Generates warmup questions |
 | **LLM Integration** | | | |
 | LLMClientFactory | `llm/factory.py` | ✅ ACTIVE | Creates LLM clients for multiple providers |
@@ -650,10 +662,10 @@ Latest schema definition for means-end chain analysis.
 **Location**: `interview/` module architecture
 
 **Implementation**:
-- `GraphNeedsDetector` - Different detection algorithms for each need
+- `ConfigurableGraphNeedsDetector` - Different detection algorithms for each need, configurable via YAML
 - `StrategySelector` - Pluggable strategy selection logic
 - `TacticSelector` - Configurable scoring strategies
-- `QuestionGenerator` - LLM provider selection and prompt strategies
+- `ConfigurableQuestionGenerator` - LLM provider selection and prompt strategies
 
 **Benefits**:
 - Easy to add new needs, strategies, or scoring methods
@@ -661,7 +673,7 @@ Latest schema definition for means-end chain analysis.
 - Clear separation of concerns
 
 ### 2. Pipeline Pattern
-**Location**: `GraphDrivenOrchestrator.next_question()`
+**Location**: `ConfigurableGraphDrivenOrchestrator.next_question()`
 
 **Implementation**:
 ```
@@ -720,12 +732,11 @@ GraphState → Needs → Strategy → Tactic → Question
 ### Test Organization
 ```
 tests/
-├── unit/                   # Component-level tests
-│   ├── test_graph_needs_detector.py  # 6 tests
-│   ├── test_strategy_selector.py     # 11 tests
-│   ├── test_orchestrator.py          # 12 tests
-│   ├── test_llm_integration.py       # 13 tests
-│   └── __init__.py
+├── test_core_functionality.py        # Core component integration tests
+├── test_extraction_pipeline_v2.py    # Extraction pipeline validation
+├── test_gradio_v2.py                 # UI component testing
+├── test_integration.py               # End-to-end integration tests
+├── test_final_validation.py          # Final validation tests
 └── __init__.py
 ```
 
@@ -983,7 +994,7 @@ Key Production Considerations:
 
 #### Adding New Needs
 1. Extend `NeedName` enum
-2. Add detection logic to `GraphNeedsDetector`
+2. Add detection logic to `ConfigurableGraphNeedsDetector`
 3. Create strategy mapping in `StrategySelector`
 4. Add configuration to `strategy_tactic_map.yaml`
 5. Write unit tests
@@ -1331,3 +1342,45 @@ def get_tactics_by_node_type(self, node_type: str) -> List[Tactic]:
 ---
 
 **Impact Summary**: These bug fixes significantly improve system reliability, performance, and user experience while maintaining the ultra-clean architecture principles. The system now provides accurate tracking, proper validation, and better error handling throughout the interview pipeline.
+
+---
+
+## Architecture Evolution
+
+### Migration from QuestionGenerator to ConfigurableQuestionGenerator
+
+**Background**: The system originally contained two question generation classes:
+- `QuestionGenerator` - Hardcoded parameters, basic LLM integration
+- `ConfigurableQuestionGenerator` - YAML-driven configuration, advanced features
+
+**Migration Decision**: Remove QuestionGenerator completely to achieve:
+- **Single Source of Truth**: One question generation approach
+- **Configuration-Driven Behavior**: All parameters externalized
+- **Cleaner Architecture**: No redundant components
+- **Better Maintainability**: Changes through config files, not code
+
+**Migration Process**:
+1. **Audit Phase**: Identified all QuestionGenerator usage across codebase
+2. **Import Updates**: Replaced all import statements
+3. **Instantiation Updates**: Converted hardcoded parameters to config-based
+4. **Test Updates**: Modified test cases to use ConfigurableQuestionGenerator
+5. **Documentation Updates**: Updated all references in architecture docs
+6. **File Removal**: Deleted original QuestionGenerator class
+7. **Verification**: Confirmed no broken references or functionality
+
+**Files Modified**:
+- `src/interview/core/configurable_orchestrator.py` - Updated imports and instantiation
+- `src/interview/tactics/__init__.py` - Updated module exports
+- `src/ui/gradio_app.py` - Removed unused QuestionGenerator instantiation
+- `tests/test_core_functionality.py` - Updated test imports and methods
+- `tests/test_gradio_v2.py` - Updated multiple test references
+- `ARCHITECTURE_V2.md` - Updated documentation (this file)
+
+**Benefits Achieved**:
+- **Cleaner Codebase**: 368 lines of redundant code removed
+- **Better Configuration**: All question generation parameters in YAML
+- **Consistent Architecture**: Aligns with configurable pattern throughout system
+- **Easier Testing**: Single component to test, configuration-driven test cases
+- **Future-Proof**: New features added through configuration, not code changes
+
+**Verification**: All tests pass, imports work correctly, functionality preserved and enhanced through configuration system.

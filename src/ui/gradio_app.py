@@ -5,6 +5,7 @@ Provides a web-based chat interface for conducting interviews with graph-driven 
 Compatible with HuggingFace Spaces deployment.
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -15,10 +16,12 @@ from dotenv import load_dotenv
 
 # Import v2 components
 from src.core.models import GraphState, InterviewState, Node, Edge
-from src.interview.core import GraphDrivenOrchestrator
-from src.interview.tactics import SchemaDrivenTacticLoader, QuestionGenerator
+from src.interview.core import ConfigurableGraphDrivenOrchestrator
+from src.interview.tactics import SchemaDrivenTacticLoader, ConfigurableQuestionGenerator
 
 from src.llm.factory import LLMClientFactory, create_default_clients
+from src.llm.dual_llm_manager import DualLLMManager
+from src.config.llm_config_loader import LLMConfigLoader
 
 # Load environment variables
 load_dotenv()
@@ -39,43 +42,67 @@ class InterviewUI:
         self.tactics = []
         self.current_graph_state = GraphState()  # Persistent graph state
         self.extraction_orchestrator = None  # Concept extraction orchestrator
+        self.dual_llm_manager = None  # Dual LLM manager for proper configuration
         logger.info("InterviewUI v2 initialized")
 
-    def setup_llm_client(self):
-        """Set up LLM client and extraction components from environment variables.
+    async def setup_llm_client(self):
+        """Set up LLM client and extraction components using proper YAML configuration.
 
         Raises:
             RuntimeError: If no API keys are configured (no LLM clients available)
         """
         try:
-            # Try to create default clients from environment
-            clients = create_default_clients()
+            # Use DualLLMManager with proper YAML configuration
+            logger.info("Setting up LLM clients using DualLLMManager with YAML configuration")
+            
+            # Create config loader and DualLLMManager
+            llm_config_loader = LLMConfigLoader("configs/llm_config.yaml")
+            self.dual_llm_manager = DualLLMManager(llm_config_loader)
+            
+            # Initialize the manager
+            success = await self.dual_llm_manager.initialize()
+            
+            if not success:
+                logger.error("Failed to initialize DualLLMManager")
+                raise RuntimeError("Dual LLM initialization failed")
+            
+            # Get the graph extraction client (for concept extraction)
+            graph_client = self.dual_llm_manager._graph_extraction_client
+            
+            if not graph_client:
+                logger.error("No graph extraction client available")
+                raise RuntimeError("No graph extraction client available")
+            
+            # Use the graph extraction client for the system
+            self.llm_client = graph_client
+            
+            logger.info(f"Using graph extraction client: {type(graph_client).__name__}")
 
-            # Fail early if no API keys are configured
-            if not clients or len(clients) == 0:
-                logger.error("No LLM API keys configured. Please set at least one of: "
-                           "ANTHROPIC_API_KEY, KIMI_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY")
-                raise RuntimeError(
-                    "Application initialization failed: No LLM API keys found in environment. "
-                    "Please configure at least one API key in your .env file."
-                )
-
-            # Use the first available client
-            provider, client = next(iter(clients.items()))
-            self.llm_client = client
-
-            logger.info(f"Using LLM client: {provider}")
-
-            # Initialize extraction components
-            self._setup_extraction_components(client)
+            # Initialize extraction components with properly configured client
+            self._setup_extraction_components(graph_client)
             return True
 
         except RuntimeError:
             # Re-raise API key errors
             raise
         except Exception as e:
-            logger.error(f"Could not create LLM client: {e}")
-            raise RuntimeError(f"Application initialization failed: {e}")
+            logger.error(f"Could not create LLM client with DualLLMManager: {e}")
+            
+            # Fallback to old method if DualLLMManager fails
+            logger.warning("Falling back to create_default_clients() method")
+            try:
+                clients = create_default_clients()
+                if clients:
+                    provider, client = next(iter(clients.items()))
+                    self.llm_client = client
+                    logger.info(f"Using fallback LLM client: {provider}")
+                    self._setup_extraction_components(client)
+                    return True
+                else:
+                    raise RuntimeError("No LLM clients available from fallback method")
+            except Exception as fallback_error:
+                logger.error(f"Fallback method also failed: {fallback_error}")
+                raise RuntimeError(f"Application initialization failed: {e}")
     
     def _setup_extraction_components(self, llm_client):
         """Set up concept extraction components."""
@@ -148,21 +175,22 @@ class InterviewUI:
 
         try:
             # Set up LLM client
-            has_llm = self.setup_llm_client()
+            has_llm = await self.setup_llm_client()
             
             # Load tactics
             tactic_loader = SchemaDrivenTacticLoader()
             self.tactics = tactic_loader.load_tactics()
             
-            # Create question generator
-            question_generator = QuestionGenerator(llm_client=self.llm_client)
-            
             # Create orchestrator with extraction support
             extraction_orchestrator = self._create_extraction_orchestrator_for_interview()
             
-            self.current_orchestrator = GraphDrivenOrchestrator(
-                question_generator=question_generator,
-                extraction_orchestrator=extraction_orchestrator
+            # Create configuration loader for configurable orchestrator
+            from src.config.interview_config_loader import InterviewConfigLoader
+            config_loader = InterviewConfigLoader()
+            
+            self.current_orchestrator = ConfigurableGraphDrivenOrchestrator(
+                extraction_orchestrator=extraction_orchestrator,
+                config_loader=config_loader
             )
             
             # Create session
@@ -172,7 +200,11 @@ class InterviewUI:
             interview_state = InterviewState(session_id=self.current_session_id)
             self.current_graph_state = GraphState()  # Initialize persistent graph state
             
-            # Extract initial concepts and generate first question
+            # Use hardcoded warm-up question with concept included
+            first_question = f"Please read the concept and tell me your first impression: {concept_description}"
+            logger.info(f"Using hardcoded warm-up question: {first_question}")
+            
+            # Extract initial concepts for graph building (but don't use them for first question)
             if extraction_orchestrator and self.llm_client:
                 try:
                     # Extract seed concepts from concept description
@@ -180,68 +212,22 @@ class InterviewUI:
                     initial_delta = await extraction_orchestrator.extract_initial_concepts(concept_description)
                     
                     if not initial_delta.is_empty():
-                        # Apply initial concepts to graph
-                        self.current_graph_state = extraction_orchestrator._apply_extraction_to_graph(
+                        # Apply initial concepts to graph (function modifies graph in-place)
+                        extraction_orchestrator._apply_extraction_to_graph(
                             delta=initial_delta,
                             current_graph=self.current_graph_state,
                             turn_number=0
                         )
                         logger.info(f"Applied {len(initial_delta.nodes_added)} initial seed concepts to graph")
                     
-                    # Set initial turn for first question (turn 0 for seed concept extraction)
-                    interview_state.turn_number = 0
-                    self.interview_turn_tracker = 0
-                    
-                    # Generate first question based on extracted concepts
-                    first_question = await self.current_orchestrator.next_question(
-                        graph_state=self.current_graph_state,
-                        interview_state=interview_state,
-                        available_tactics=self.tactics
-                    )
-                    
-                    logger.info(f"Generated first question based on extracted concepts: {first_question}")
-                    
                 except Exception as e:
                     logger.error(f"Failed to extract initial concepts: {e}")
-                    # Use InterviewConfig for fallback behavior instead of settings
-                    from src.config.interview_config_loader import InterviewConfigLoader
-                    try:
-                        config_loader = InterviewConfigLoader()
-                        interview_config = config_loader.load_config()
-                        enable_fallback = interview_config.interview_flow.enable_fallback
-                    except Exception:
-                        # If config loading fails, default to no fallback
-                        enable_fallback = False
-                    
-                    if enable_fallback:
-                        logger.info("Falling back to regular orchestration (fallback enabled in config)")
-                        # Set initial turn for fallback first question
-                        interview_state.turn_number = 0
-                        self.interview_turn_tracker = 0
-                        first_question = await self.current_orchestrator.next_question(
-                            graph_state=self.current_graph_state,
-                            interview_state=interview_state,
-                            available_tactics=self.tactics
-                        )
-                    else:
-                        logger.error("Fallback disabled in config - cannot proceed without extraction")
-                        raise RuntimeError(
-                            "Failed to extract initial concepts and fallback is disabled. "
-                            "Check your LLM configuration or enable fallback in interview config."
-                        )
-            else:
-                # No extraction available, use regular orchestration
-                # Set initial turn for first question without extraction
-                interview_state.turn_number = 0
-                self.interview_turn_tracker = 0
-                first_question = await self.current_orchestrator.next_question(
-                    graph_state=self.current_graph_state,
-                    interview_state=interview_state,
-                    available_tactics=self.tactics
-                )
+                    # Continue without initial concept extraction - graph will be built during interview
+                    logger.info("Continuing without initial concept extraction - graph will be built during interview")
             
-            if not first_question:
-                first_question = "Tell me about your experience with this concept."
+            # Set initial turn for first question
+            interview_state.turn_number = 0
+            self.interview_turn_tracker = 0
 
             # Build initial history
             history = [{"role": "assistant", "content": first_question}]

@@ -3,8 +3,8 @@
 Core Functionality Test Script
 
 Tests the critical path after reorganization:
-GraphDrivenOrchestrator → GraphNeedsDetector → StrategySelector → 
-SchemaDrivenTacticSelector → QuestionGenerator
+ConfigurableGraphDrivenOrchestrator → ConfigurableGraphNeedsDetector → StrategySelector → 
+SchemaDrivenTacticSelector → ConfigurableQuestionGenerator
 
 Also tests schema v0.2 integration and component communication.
 """
@@ -21,12 +21,12 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 # Import all core components
 from src.core.models import GraphState, InterviewState, Node, Edge, NeedName, StrategyName
 from src.core.schema_loader import SchemaLoader
-from src.interview.core.graph_driven_orchestrator import GraphDrivenOrchestrator
-from src.interview.core.graph_needs_detector import GraphNeedsDetector
+from src.interview.core.configurable_orchestrator import ConfigurableGraphDrivenOrchestrator
+from src.interview.core.configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
 from src.interview.core.strategy_selector import StrategySelector
 from src.interview.tactics.selector import SchemaDrivenTacticSelector
 from src.interview.tactics.loader import SchemaDrivenTacticLoader
-from src.interview.tactics.question_generator import QuestionGenerator
+from src.interview.tactics.configurable_question_generator import ConfigurableQuestionGenerator
 
 # Configure logging
 logging.basicConfig(
@@ -48,11 +48,38 @@ class CoreFunctionalityTester:
         
         try:
             # Initialize core components
-            self.components['orchestrator'] = GraphDrivenOrchestrator()
-            self.components['needs_detector'] = GraphNeedsDetector()
-            self.components['strategy_selector'] = StrategySelector()
+            # Create configurable needs detector with default config
+            from src.config.interview_config_loader import InterviewConfigLoader
+            config_loader = InterviewConfigLoader()
+            config = config_loader.load_config()
+            self.components['needs_detector'] = ConfigurableGraphNeedsDetector(config)
+            
+            # Create configurable orchestrator with proper dependencies
+            from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
+            from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor
+            
+            # Create a mock extraction orchestrator for testing
+            llm_client = None  # Will use template mode
+            schema_path = "schemas/means_end_chain_v0.2.yaml"
+            prompt_builder = ExtractionPromptBuilder(schema_path)
+            validator = ExtractionValidator(schema_path)
+            response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
+            concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+            
+            extraction_orchestrator = GraphExtractionOrchestrator(
+                response_processor=response_processor,
+                concept_extractor=concept_extractor
+            )
+            
+            # Create configurable orchestrator
+            self.components['orchestrator'] = ConfigurableGraphDrivenOrchestrator(
+                extraction_orchestrator=extraction_orchestrator,
+                config_loader=config_loader
+            )
+            
+            self.components['strategy_selector'] = StrategySelector(config=config)
             self.components['tactic_selector'] = SchemaDrivenTacticSelector()
-            self.components['question_generator'] = QuestionGenerator()
+            self.components['question_generator'] = ConfigurableQuestionGenerator(config=config)
             self.components['schema_loader'] = SchemaLoader()
             self.components['tactic_loader'] = SchemaDrivenTacticLoader()
             
@@ -114,11 +141,11 @@ class CoreFunctionalityTester:
         try:
             # Test basic imports
             from src.core.models import GraphState, InterviewState
-            from src.interview.core.graph_driven_orchestrator import GraphDrivenOrchestrator
-            from src.interview.core.graph_needs_detector import GraphNeedsDetector
+            from src.interview.core.configurable_orchestrator import ConfigurableGraphDrivenOrchestrator
+            from src.interview.core.configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
             from src.interview.core.strategy_selector import StrategySelector
             from src.interview.tactics.selector import SchemaDrivenTacticSelector
-            from src.interview.tactics.question_generator import QuestionGenerator
+            from src.interview.tactics.configurable_question_generator import ConfigurableQuestionGenerator
             
             logger.info("✓ All imports successful")
             return True
@@ -128,8 +155,8 @@ class CoreFunctionalityTester:
             return False
     
     async def test_orchestrator_instantiation(self) -> bool:
-        """Test that GraphDrivenOrchestrator can be instantiated."""
-        logger.info("Testing GraphDrivenOrchestrator instantiation...")
+        """Test that ConfigurableGraphDrivenOrchestrator can be instantiated."""
+        logger.info("Testing ConfigurableGraphDrivenOrchestrator instantiation...")
         
         try:
             orchestrator = self.components['orchestrator']
@@ -143,7 +170,7 @@ class CoreFunctionalityTester:
             # Test validation
             assert orchestrator.validate_components() is True
             
-            logger.info("✓ GraphDrivenOrchestrator instantiated and validated successfully")
+            logger.info("✓ ConfigurableGraphDrivenOrchestrator instantiated and validated successfully")
             return True
             
         except Exception as e:
@@ -151,15 +178,15 @@ class CoreFunctionalityTester:
             return False
     
     async def test_needs_detection(self) -> bool:
-        """Test GraphNeedsDetector functionality."""
-        logger.info("Testing GraphNeedsDetector...")
+        """Test ConfigurableGraphNeedsDetector functionality."""
+        logger.info("Testing ConfigurableGraphNeedsDetector...")
         
         try:
             detector = self.components['needs_detector']
             graph_state = self.create_test_graph_state()
             
             # Test needs detection
-            needs = detector.detect(graph_state)
+            needs = detector.detect_productive_needs(graph_state)
             
             assert isinstance(needs, list)
             assert len(needs) > 0
@@ -189,11 +216,12 @@ class CoreFunctionalityTester:
             detector = self.components['needs_detector']
             
             # Get needs first
-            needs = detector.detect(graph_state)
+            needs = detector.detect_productive_needs(graph_state)
             assert len(needs) > 0
             
             # Test strategy selection
-            strategy = selector.select(needs)
+            interview_state = InterviewState(session_id="test_session")
+            strategy = selector.select(needs, graph_state, interview_state)
             
             assert strategy in StrategyName
             
@@ -268,8 +296,8 @@ class CoreFunctionalityTester:
             return False
     
     async def test_question_generation(self) -> bool:
-        """Test QuestionGenerator functionality."""
-        logger.info("Testing QuestionGenerator...")
+        """Test ConfigurableQuestionGenerator functionality."""
+        logger.info("Testing ConfigurableQuestionGenerator...")
         
         try:
             generator = self.components['question_generator']
@@ -463,7 +491,7 @@ class CoreFunctionalityTester:
 async def main():
     """Main test execution."""
     logger.info("Starting Core Functionality Test Suite")
-    logger.info("Testing critical path: GraphDrivenOrchestrator → GraphNeedsDetector → StrategySelector → SchemaDrivenTacticSelector → QuestionGenerator")
+    logger.info("Testing critical path: ConfigurableGraphDrivenOrchestrator → ConfigurableGraphNeedsDetector → StrategySelector → SchemaDrivenTacticSelector → ConfigurableQuestionGenerator")
     
     tester = CoreFunctionalityTester()
     results = await tester.run_all_tests()

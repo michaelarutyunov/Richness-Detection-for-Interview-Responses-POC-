@@ -25,12 +25,24 @@ class SchemaDrivenTacticLoader:
         """Load all available tactics from schema."""
         logger.info("Loading tactics from schema")
 
-        # Get tactics from schema loader - return directly without conversion
-        schema_tactics = self.schema_loader.get_all_tactics()
-
-        # Cache all tactics
-        for tactic in schema_tactics:
-            self._tactics_cache[tactic.id] = tactic
+        # Get tactics from schema loader - these are TacticDefinition objects
+        tactic_definitions = self.schema_loader.get_all_tactics()
+        
+        # Convert TacticDefinition objects to SchemaTactic objects
+        schema_tactics = []
+        for tactic_def in tactic_definitions:
+            schema_tactic = SchemaTactic(
+                id=tactic_def.id,
+                intent=tactic_def.intent,
+                trigger=tactic_def.trigger,
+                pattern=tactic_def.pattern,
+                followups=tactic_def.followups,
+                produces_node_types=tactic_def.produces_node_types,
+                valid_edge_types=tactic_def.valid_edge_types,
+                constraints=tactic_def.constraints
+            )
+            schema_tactics.append(schema_tactic)
+            self._tactics_cache[tactic_def.id] = schema_tactic
 
         logger.info(f"Loaded {len(schema_tactics)} tactics from schema")
         return schema_tactics
@@ -40,9 +52,20 @@ class SchemaDrivenTacticLoader:
         if tactic_id in self._tactics_cache:
             return self._tactics_cache[tactic_id]
 
-        # Load from schema if not cached
-        schema_tactic = self.schema_loader.get_tactic(tactic_id)
-        if schema_tactic:
+        # Load from schema if not cached - this returns a TacticDefinition
+        tactic_def = self.schema_loader.get_tactic(tactic_id)
+        if tactic_def:
+            # Convert TacticDefinition to SchemaTactic
+            schema_tactic = SchemaTactic(
+                id=tactic_def.id,
+                intent=tactic_def.intent,
+                trigger=tactic_def.trigger,
+                pattern=tactic_def.pattern,
+                followups=tactic_def.followups,
+                produces_node_types=tactic_def.produces_node_types,
+                valid_edge_types=tactic_def.valid_edge_types,
+                constraints=tactic_def.constraints
+            )
             self._tactics_cache[tactic_id] = schema_tactic
             return schema_tactic
 

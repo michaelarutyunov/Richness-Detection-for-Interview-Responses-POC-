@@ -6,7 +6,6 @@ import logging
 from typing import List, Optional
 from src.core.models import Need, StrategyName, NeedName, GraphState, InterviewState
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -26,14 +25,19 @@ class StrategySelector:
         NeedName.SEED_EXPANSION: StrategyName.SEED_EXPANSION,
     }
     
-    def __init__(self, dead_end_threshold: float = 0.6):
+    def __init__(self, dead_end_threshold: float = 0.6, config: Optional['InterviewConfig'] = None,
+                 needs_detector: Optional['ConfigurableGraphNeedsDetector'] = None):
         """
         Initialize the strategy selector with configuration.
 
         Args:
             dead_end_threshold: Score threshold above which dead-end is detected (default: 0.6)
+            config: Optional interview configuration for configurable needs detector
+            needs_detector: Optional needs detector for advanced dead-end calculation
         """
         self.dead_end_threshold = dead_end_threshold
+        self.config = config
+        self.needs_detector = needs_detector
         logger.info("StrategySelector initialized with dead_end_threshold=%.2f", dead_end_threshold)
         logger.debug("Need to strategy mapping: %s", self.NEED_TO_STRATEGY_MAP)
     
@@ -68,12 +72,8 @@ class StrategySelector:
             return strategy
         
         # Step 2: No productive moves - check for dead-end stalling
-        from src.interview.core.graph_needs_detector import GraphNeedsDetector
-        # Create detector without config - will use default behavior
-        needs_detector = GraphNeedsDetector()
-        dead_end_score = needs_detector.calculate_dead_end_score(
-            graph_state, interview_state
-        )
+        # Use advanced dead-end detection from needs detector
+        dead_end_score = self.needs_detector.calculate_dead_end_score(graph_state, interview_state)
         
         if dead_end_score >= self.dead_end_threshold:  # Use configured threshold
             logger.info("Dead-end detected (score: %.2f >= threshold: %.2f), using resolution strategy",

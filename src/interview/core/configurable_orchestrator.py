@@ -6,10 +6,10 @@ Replaces hardcoded values with configuration-driven behavior.
 import logging
 from typing import Optional, List, Dict, Any
 from src.core.models import GraphState, InterviewState, SchemaTactic
-from src.interview.core.graph_needs_detector import GraphNeedsDetector
+from src.interview.core.configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
 from src.interview.core.strategy_selector import StrategySelector
 from src.interview.tactics.selector import SchemaDrivenTacticSelector
-from src.interview.tactics.question_generator import QuestionGenerator
+from src.interview.tactics.configurable_question_generator import ConfigurableQuestionGenerator
 from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
 from src.config.interview_config_loader import InterviewConfig, InterviewConfigLoader
 
@@ -27,16 +27,16 @@ class ConfigurableGraphDrivenOrchestrator:
     def __init__(self, 
                  extraction_orchestrator: GraphExtractionOrchestrator,
                  config_loader: InterviewConfigLoader,
-                 needs_detector: GraphNeedsDetector = None,
+                 needs_detector: ConfigurableGraphNeedsDetector = None,
                  strategy_selector: StrategySelector = None,
                  tactic_selector: SchemaDrivenTacticSelector = None,
-                 question_generator: QuestionGenerator = None):
+                 question_generator: ConfigurableQuestionGenerator = None):
         """Initialize the configurable orchestrator with configuration loader.
 
         Args:
             extraction_orchestrator: Required graph extraction orchestrator
             config_loader: Interview configuration loader
-            needs_detector: Optional graph needs detector (uses config if not provided)
+            needs_detector: Optional configurable graph needs detector (uses config if not provided)
             strategy_selector: Optional strategy selector (uses config if not provided)
             tactic_selector: Optional tactic selector (uses config if not provided)
             question_generator: Optional question generator (uses config if not provided)
@@ -67,14 +67,16 @@ class ConfigurableGraphDrivenOrchestrator:
                    type(self.config.graph_needs).__name__,
                    type(self.config.llm).__name__)
     
-    def _create_configured_needs_detector(self) -> GraphNeedsDetector:
-        """Create GraphNeedsDetector with configuration values."""
-        return GraphNeedsDetector(config=self.config.graph_needs)
+    def _create_configured_needs_detector(self) -> ConfigurableGraphNeedsDetector:
+        """Create ConfigurableGraphNeedsDetector with configuration values."""
+        return ConfigurableGraphNeedsDetector(config=self.config)
     
     def _create_configured_strategy_selector(self) -> StrategySelector:
         """Create StrategySelector with configuration values."""
         return StrategySelector(
-            dead_end_threshold=self.config.graph_needs.dead_end_threshold
+            dead_end_threshold=self.config.graph_needs.dead_end_threshold,
+            config=self.config,
+            needs_detector=self.needs_detector
         )
     
     def _create_configured_tactic_selector(self) -> SchemaDrivenTacticSelector:
@@ -87,14 +89,9 @@ class ConfigurableGraphDrivenOrchestrator:
             recent_questions_count=self.config.tactic_selection.recent_questions_count
         )
     
-    def _create_configured_question_generator(self) -> QuestionGenerator:
-        """Create QuestionGenerator with configuration values."""
-        return QuestionGenerator(
-            temperature=self.config.question_generation.temperature,
-            max_tokens=self.config.question_generation.max_tokens,
-            max_question_length=self.config.question_generation.max_question_length,
-            context_weights=self.config.question_generation.context_weights
-        )
+    def _create_configured_question_generator(self) -> ConfigurableQuestionGenerator:
+        """Create ConfigurableQuestionGenerator with configuration values."""
+        return ConfigurableQuestionGenerator(config=self.config)
     
     async def next_question(self, graph_state: GraphState, interview_state: InterviewState,
                      available_tactics: list) -> Optional[str]:
@@ -136,6 +133,9 @@ class ConfigurableGraphDrivenOrchestrator:
             
             # Step 3: Select tactic with configured parameters
             logger.debug("Step 3: Selecting tactic with configuration")
+            from src.interview.tactics.loader import SchemaDrivenTacticLoader
+            tactic_loader = SchemaDrivenTacticLoader()
+            available_tactics = tactic_loader.load_tactics()
             tactic = self.tactic_selector.select(strategy, interview_state, available_tactics)
             
             if not tactic:
@@ -144,9 +144,19 @@ class ConfigurableGraphDrivenOrchestrator:
             
             # Step 4: Generate question with configured parameters
             logger.debug("Step 4: Generating question with configuration")
-            question = await self.question_generator.generate_question(
-                graph_state, interview_state, tactic, available_tactics
+            question, tokens_used = await self.question_generator.generate_question(
+                tactic=tactic,
+                graph_state=graph_state,
+                interview_state=interview_state
             )
+            
+            # Track token usage from question generation
+            interview_state.add_token_usage(
+                prompt_tokens=0,  # Question generation doesn't separate prompt/completion
+                completion_tokens=0,
+                total_tokens=tokens_used
+            )
+            logger.debug(f"Tracked {tokens_used} tokens from question generation")
             
             if question:
                 logger.info("Generated question successfully with configuration")
@@ -157,6 +167,74 @@ class ConfigurableGraphDrivenOrchestrator:
                 
         except Exception as e:
             logger.error(f"Interview orchestration failed with configuration: {e}", exc_info=True)
+            return self._get_configured_fallback_question(interview_state)
+    
+    async def process_response(self, response_text: str, 
+                             conversation_history: List[Dict[str, str]],
+                             graph_state: GraphState,
+                             interview_state: InterviewState) -> Optional[str]:
+        """
+        Process participant response and generate the next question.
+        
+        Args:
+            response_text: Participant's response text
+            conversation_history: Recent conversation turns
+            graph_state: Current knowledge graph state
+            interview_state: Current interview state
+            
+        Returns:
+            Generated next question or None if generation fails
+        """
+        logger.info(f"Processing response for turn {interview_state.turn_number}")
+        
+        try:
+            # Process response through extraction if available
+            if self.extraction_orchestrator:
+                logger.debug("Processing response through concept extraction")
+                delta, extraction_result = await self.extraction_orchestrator.process_participant_response(
+                    response_text=response_text,
+                    conversation_history=conversation_history,
+                    current_graph=graph_state,
+                    interview_state=interview_state
+                )
+                
+                # Track token usage from extraction
+                if extraction_result and extraction_result.metadata:
+                    interview_state.add_token_usage(
+                        prompt_tokens=0,  # Extraction doesn't separate prompt/completion
+                        completion_tokens=0,
+                        total_tokens=extraction_result.metadata.tokens_used
+                    )
+                    logger.debug(f"Tracked {extraction_result.metadata.tokens_used} tokens from extraction")
+                
+                if not delta.is_empty():
+                    logger.info(f"Extracted {len(delta.nodes_added)} new concepts from response")
+                else:
+                    logger.debug("No new concepts extracted from response")
+            else:
+                logger.debug("No extraction orchestrator available, skipping concept extraction")
+            
+            # Generate next question using updated graph state
+            logger.debug("Generating next question after response processing")
+            from src.interview.tactics.loader import SchemaDrivenTacticLoader
+            tactic_loader = SchemaDrivenTacticLoader()
+            available_tactics = tactic_loader.load_tactics()
+            
+            next_question = await self.next_question(
+                graph_state=graph_state,
+                interview_state=interview_state,
+                available_tactics=available_tactics
+            )
+            
+            if next_question:
+                logger.info(f"Generated next question: {next_question}")
+                return next_question
+            else:
+                logger.warning("Failed to generate next question, using fallback")
+                return self._get_configured_fallback_question(interview_state)
+                
+        except Exception as e:
+            logger.error(f"Response processing failed: {e}", exc_info=True)
             return self._get_configured_fallback_question(interview_state)
     
     def _get_configured_fallback_question(self, interview_state: InterviewState) -> str:
@@ -193,3 +271,32 @@ class ConfigurableGraphDrivenOrchestrator:
                 "question_temperature": self.config.llm.question_temperature
             }
         }
+    
+    def get_orchestrator_state(self) -> Dict:
+        """Get current state of the orchestrator components."""
+        return {
+            "needs_detector": type(self.needs_detector).__name__,
+            "strategy_selector": type(self.strategy_selector).__name__,
+            "tactic_selector": type(self.tactic_selector).__name__,
+            "components_initialized": True
+        }
+    
+    def validate_components(self) -> bool:
+        """Validate that all orchestrator components are properly initialized."""
+        try:
+            assert self.needs_detector is not None, "Needs detector not initialized"
+            assert self.strategy_selector is not None, "Strategy selector not initialized"
+            assert self.tactic_selector is not None, "SchemaTactic selector not initialized"
+            
+            logger.debug("All orchestrator components validated successfully")
+            return True
+            
+        except AssertionError as e:
+            logger.error("Orchestrator component validation failed: %s", str(e))
+            return False
+    
+    def __str__(self) -> str:
+        """String representation of the orchestrator."""
+        return (f"ConfigurableGraphDrivenOrchestrator(needs_detector={type(self.needs_detector).__name__}, "
+                f"strategy_selector={type(self.strategy_selector).__name__}, "
+                f"tactic_selector={type(self.tactic_selector).__name__})")

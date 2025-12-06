@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from src.core.models import GraphState, InterviewState, Node, Edge
-from src.interview.core.graph_driven_orchestrator import GraphDrivenOrchestrator
+from src.interview.core.configurable_orchestrator import ConfigurableGraphDrivenOrchestrator
 from src.interview.tactics.loader import SchemaDrivenTacticLoader
 
 # Configure logging
@@ -31,7 +31,31 @@ async def test_interview_scenario():
     
     try:
         # Initialize components
-        orchestrator = GraphDrivenOrchestrator()
+        # Create configurable orchestrator with proper dependencies
+        from src.config.interview_config_loader import InterviewConfigLoader
+        from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
+        from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor
+        
+        # Create a mock extraction orchestrator for testing
+        llm_client = None  # Will use template mode
+        schema_path = "schemas/means_end_chain_v0.2.yaml"
+        prompt_builder = ExtractionPromptBuilder(schema_path)
+        validator = ExtractionValidator(schema_path)
+        response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
+        concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+        
+        extraction_orchestrator = GraphExtractionOrchestrator(
+            response_processor=response_processor,
+            concept_extractor=concept_extractor
+        )
+        
+        # Create configuration loader
+        config_loader = InterviewConfigLoader()
+        
+        orchestrator = ConfigurableGraphDrivenOrchestrator(
+            extraction_orchestrator=extraction_orchestrator,
+            config_loader=config_loader
+        )
         tactic_loader = SchemaDrivenTacticLoader()
         
         # Create initial interview state
@@ -80,7 +104,6 @@ async def test_interview_scenario():
         # Update interview state
         interview_state.increment_turn()
         interview_state.add_question(first_question)
-        interview_state.phase = "DEPTH"  # Move to depth phase
         
         # Generate follow-up question
         logger.info("Generating follow-up question based on updated graph...")
@@ -95,10 +118,15 @@ async def test_interview_scenario():
         # Verify graph state
         logger.info(f"Graph now has {graph_state.get_node_count()} nodes and {graph_state.get_edge_count()} edges")
         
-        # Test needs detection on updated graph
-        from src.interview.core.graph_needs_detector import GraphNeedsDetector
-        needs_detector = GraphNeedsDetector()
-        needs = needs_detector.detect(graph_state)
+        # Test needs detection on updated graph (using configurable detector)
+        from src.interview.core.configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
+        from src.config.interview_config_loader import InterviewConfigLoader, InterviewConfig
+        
+        # Create default config for needs detection
+        config_loader = InterviewConfigLoader()
+        config = config_loader.load_config()
+        needs_detector = ConfigurableGraphNeedsDetector(config)
+        needs = needs_detector.detect_productive_needs(graph_state)
         logger.info(f"Detected needs: {[str(need) for need in needs]}")
         
         logger.info("✓ Integration test completed successfully!")

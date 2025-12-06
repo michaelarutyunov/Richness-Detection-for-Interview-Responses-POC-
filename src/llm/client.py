@@ -147,7 +147,7 @@ class AnthropicClient(BaseLLMClient):
     
     def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", **kwargs):
         """Initialize Anthropic client."""
-        super().__init__(model, provider="anthropic", **kwargs)
+        super().__init__(model, provider=LLMProvider.ANTHROPIC, **kwargs)
         self.api_key = api_key
         
         # Import anthropic library only when needed
@@ -316,7 +316,7 @@ class DeepSeekClient(BaseLLMClient):
         self.base_url = base_url or "https://api.deepseek.com/v1"
         # Only pass temperature and max_tokens to base class
         base_kwargs = {k: v for k, v in kwargs.items() if k in ['temperature', 'max_tokens']}
-        super().__init__(model, provider="deepseek", **base_kwargs)
+        super().__init__(model, provider=LLMProvider.DEEPSEEK, **base_kwargs)
         self.api_key = api_key
         self.provider = LLMProvider.DEEPSEEK
         
@@ -460,10 +460,10 @@ class KimiClient(BaseLLMClient):
     def __init__(self, api_key: str, model: str = "moonshot-v1-8k", base_url: Optional[str] = None, **kwargs):
         """Initialize Kimi client."""
         # Extract base_url before calling super() to avoid passing it to base class
-        self.base_url = base_url or "https://api.moonshot.cn/v1"
+        self.base_url = base_url or "https://api.moonshot.ai/v1"
         # Only pass temperature and max_tokens to base class
         base_kwargs = {k: v for k, v in kwargs.items() if k in ['temperature', 'max_tokens']}
-        super().__init__(model, provider="kimi", **base_kwargs)
+        super().__init__(model, provider=LLMProvider.KIMI, **base_kwargs)
         self.api_key = api_key
         self.provider = LLMProvider.KIMI
         

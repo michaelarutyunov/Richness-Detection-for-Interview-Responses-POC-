@@ -139,9 +139,12 @@ Return JSON array:
                             logger.warning(f"Skipping node with missing label: type='{node_type}'")
                             continue
 
+                        # Normalize label to lowercase_with_underscores format
+                        normalized_label = node_label.lower().replace(" ", "_")
+                        
                         nodes.append({
                             "type": node_type,
-                            "label": node_label,
+                            "label": normalized_label,
                             "quote": concept.get("description", "")
                         })
                 

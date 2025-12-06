@@ -180,6 +180,28 @@ tactics:
       min_turn: 3
       max_visit_count: 2
 
+  expectation_reality:
+    intent: "Explore the gap between expectations and actual experience"
+    trigger:
+      graph:
+        need: bridge_building
+        conditions:
+          isolation_ratio_above: 0.15
+      semantic:
+        lexical_markers: ["expected", "thought", "supposed", "actually", "really"]
+    pattern:
+      variants:
+        - "How does the reality compare to what you expected?"
+        - "What's different between what you thought would happen and what actually did?"
+        - "Has your view changed since you first started using it?"
+    followups:
+      comparative: "Which surprised you more?"
+    produces_node_types: ["psychosocial_consequence", "value"]
+    valid_edge_types: ["leads_to", "blocks"]
+    constraints:
+      min_turn: 2
+      max_visit_count: 2
+
   value_ladder:
     intent: "Elevate psychosocial consequence into a value"
     trigger:

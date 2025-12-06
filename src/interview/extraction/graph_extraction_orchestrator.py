@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from src.core.models import GraphState, InterviewState, Node, Edge
+from src.core.extraction_models import GraphDelta
 from src.core.extraction_models import GraphDelta, ExtractionResult
 from src.interview.extraction.response_processor import ResponseProcessor
 from src.interview.extraction.concept_extractor import ConceptExtractor
@@ -33,7 +34,7 @@ class GraphExtractionOrchestrator:
     async def process_participant_response(self, response_text: str, 
                                          conversation_history: List[Dict[str, str]],
                                          current_graph: GraphState,
-                                         interview_state: InterviewState) -> GraphDelta:
+                                         interview_state: InterviewState) -> tuple[GraphDelta, Optional['ExtractionResult']]:
         """
         Process participant response and extract concepts to update graph.
         
@@ -44,7 +45,7 @@ class GraphExtractionOrchestrator:
             interview_state: Current interview state
             
         Returns:
-            GraphDelta with changes applied to the graph
+            Tuple of (GraphDelta with changes applied to the graph, ExtractionResult with metadata)
         """
         logger.info(f"Processing participant response for turn {interview_state.turn_number}")
         
@@ -62,7 +63,7 @@ class GraphExtractionOrchestrator:
             
             if not extraction_result.success or extraction_result.delta.is_empty():
                 logger.info(f"No concepts extracted from response: {extraction_result.error_message}")
-                return extraction_result.delta
+                return extraction_result.delta, extraction_result
             
             # Apply extracted concepts to graph
             updated_delta = self._apply_extraction_to_graph(
@@ -72,11 +73,11 @@ class GraphExtractionOrchestrator:
             )
             
             logger.info(f"Applied extraction: {updated_delta.get_summary()}")
-            return updated_delta
+            return updated_delta, extraction_result
             
         except Exception as e:
             logger.error(f"Failed to process participant response: {e}", exc_info=True)
-            return GraphDelta()  # Return empty delta on error
+            return GraphDelta(), None  # Return empty delta and no extraction result on error
     
     def _apply_extraction_to_graph(self, delta: GraphDelta, current_graph: GraphState,
                                  turn_number: int) -> GraphDelta:

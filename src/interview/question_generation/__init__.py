@@ -5,10 +5,8 @@ This module handles the generation and management of interview questions,
 including dynamic question creation, question templates, and question optimization.
 """
 
-from .warmup_generator import WarmupGenerator
-
 __all__ = [
-    'WarmupGenerator'
+    # Removed WarmupGenerator - no longer used
 ]
 
 __version__ = "1.0.0"

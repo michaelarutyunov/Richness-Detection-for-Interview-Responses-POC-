@@ -118,12 +118,13 @@ class ResponseProcessor:
             raise
     
     async def _call_llm_with_retry(self, messages: List[dict], function_schema: dict) -> Optional[LLMResponse]:
-        """Call LLM with retry logic that distinguishes failure modes."""
+        """Call LLM with retry logic that handles both function calling and regular completion."""
         max_retries = 2
         last_error = None
 
         for attempt in range(max_retries):
             try:
+                # Try function calling first
                 response = await self.llm.generate_completion_with_function_call(
                     messages=messages,
                     function_schema=function_schema
@@ -132,9 +133,24 @@ class ResponseProcessor:
                 if response and response.function_call:
                     return response
 
-                # Empty response - should retry
-                logger.warning(f"Attempt {attempt + 1}/{max_retries}: No function call returned, retrying...")
-                last_error = "No function call in response"
+                # If no function call, try regular completion as fallback
+                logger.warning(f"Attempt {attempt + 1}/{max_retries}: No function call returned, trying regular completion...")
+                
+                response = await self.llm.generate_completion(messages)
+                if response and response.content:
+                    # Parse the content to extract structured data
+                    parsed_data = self._parse_completion_content(response.content, function_schema)
+                    if parsed_data:
+                        # Create a mock function call response
+                        response.function_call = {
+                            "name": function_schema.get("name", "extract_concepts"),
+                            "arguments": parsed_data
+                        }
+                        return response
+
+                # Still no valid response - should retry
+                logger.warning(f"Attempt {attempt + 1}/{max_retries}: No valid response returned, retrying...")
+                last_error = "No valid response from LLM"
                 continue  # Explicitly continue to next attempt
 
             except Exception as e:
@@ -146,17 +162,92 @@ class ResponseProcessor:
         logger.error(f"All {max_retries} attempts failed. Last error: {last_error}")
         return None
     
+    def _parse_completion_content(self, content: str, function_schema: dict) -> Optional[dict]:
+        """Parse regular completion content to extract structured data."""
+        try:
+            # Try to extract JSON-like structure from the content
+            import json
+            import re
+            
+            # Look for JSON-like structure in the content
+            json_pattern = r'\{[^{}]*\{[^{}]*\}[^{}]*\}'  # Look for nested braces
+            json_matches = re.findall(json_pattern, content, re.DOTALL)
+            
+            if json_matches:
+                # Try to parse the first JSON-like structure
+                for match in json_matches:
+                    try:
+                        parsed = json.loads(match)
+                        # Check if it has the expected structure
+                        if 'nodes_added' in parsed or 'edges_added' in parsed:
+                            return parsed
+                    except json.JSONDecodeError:
+                        continue
+            
+            # If no JSON found, try to extract nodes and edges from text
+            nodes = []
+            edges = []
+            
+            # Simple pattern matching for nodes and edges
+            # Look for patterns like "Node: type=attribute, label=useful_feature"
+            node_pattern = r'(?:node|concept):?\s+(\w+):?\s+(\w+)'
+            edge_pattern = r'(?:edge|relationship):?\s+(\w+)\s+(\w+)\s+(\w+)'
+            
+            # This is a simplified parser - in production, you'd want more sophisticated parsing
+            lines = content.lower().split('\n')
+            for line in lines:
+                if 'node' in line or 'concept' in line:
+                    # Try to extract node information
+                    match = re.search(node_pattern, line, re.IGNORECASE)
+                    if match:
+                        node_type, label = match.groups()
+                        nodes.append({
+                            "type": node_type,
+                            "label": label.lower().replace(' ', '_'),
+                            "quote": line.strip()
+                        })
+                
+                if 'edge' in line or 'relationship' in line:
+                    # Try to extract edge information
+                    match = re.search(edge_pattern, line, re.IGNORECASE)
+                    if match:
+                        source, edge_type, target = match.groups()
+                        edges.append({
+                            "type": edge_type,
+                            "source": source.lower().replace(' ', '_'),
+                            "target": target.lower().replace(' ', '_'),
+                            "quote": line.strip(),
+                            "confidence": 0.7
+                        })
+            
+            if nodes or edges:
+                return {
+                    "nodes_added": nodes,
+                    "edges_added": edges
+                }
+            
+            # If still no structure found, return None
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse completion content: {e}")
+            return None
+    
     def _build_extraction_result(self, validated_extraction: dict, turn_number: int,
                                start_time: datetime, llm_response: LLMResponse,
                                validation_errors: List[str]) -> ExtractionResult:
         """Build final extraction result from validated data."""
         
-        # Build nodes
+        # Build nodes with label normalization
         nodes = []
         for node_data in validated_extraction.get("nodes", []):
+            # Normalize label to lowercase_with_underscores format
+            raw_label = node_data.get("label", "")
+            normalized_label = raw_label.lower().replace(" ", "_")
+            
             node = ExtractedNode(
                 type=node_data.get("type", "unknown"),
-                label=node_data.get("label", ""),
+                label=normalized_label,
                 quote=node_data.get("quote", "")
             )
             nodes.append(node)

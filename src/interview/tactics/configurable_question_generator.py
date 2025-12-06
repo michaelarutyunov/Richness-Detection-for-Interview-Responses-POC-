@@ -4,11 +4,12 @@ Generates questions with configurable parameters instead of hardcoded values.
 """
 
 import logging
+import os
 from typing import Optional, List, Dict, Any
 from src.core.models import SchemaTactic, GraphState, InterviewState, Node
 from src.llm.client import BaseLLMClient, LLMResponse
 from src.llm.factory import LLMClientFactory
-from src.interview.question_generation.warmup_generator import WarmupGenerator
+
 from src.config.interview_config_loader import InterviewConfig
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,6 @@ class ConfigurableQuestionGenerator:
         """
         self.config = config
         self.llm_client = llm_client
-        self.warmup_generator = WarmupGenerator(llm_client=llm_client) if llm_client else None
         
         # Use configuration values instead of hardcoded ones
         if not self.llm_client:
@@ -44,7 +44,6 @@ class ConfigurableQuestionGenerator:
                     temperature=self.config.llm.question_temperature,
                     max_tokens=self.config.llm.max_tokens
                 )
-                self.warmup_generator = WarmupGenerator(llm_client=self.llm_client)
             except Exception as e:
                 logger.warning(f"Could not create LLM client from config: {e}")
                 self.llm_client = None
@@ -57,7 +56,7 @@ class ConfigurableQuestionGenerator:
         graph_state: GraphState,
         interview_state: InterviewState,
         context_node: Optional[Node] = None
-    ) -> str:
+    ) -> tuple[str, int]:
         """Generate a natural interview question using configuration values.
         
         Args:
@@ -67,14 +66,14 @@ class ConfigurableQuestionGenerator:
             context_node: Specific node to focus question on
             
         Returns:
-            Generated interview question using configuration
+            Tuple of (generated interview question, tokens used)
         """
         logger.info(f"Generating question with tactic: {tactic.id} using configuration")
         
         # If no LLM client, use configurable fallback templates
         if not self.llm_client:
             logger.debug("No LLM client available, using configurable template fallback")
-            return self._generate_from_template_with_config(tactic, graph_state, context_node)
+            return self._generate_from_template_with_config(tactic, graph_state, context_node), 0
         
         try:
             # Build comprehensive context using configuration values
@@ -91,13 +90,18 @@ class ConfigurableQuestionGenerator:
             # Post-process the generated question using configuration
             question = self._post_process_question_with_config(response.content, context)
             
-            logger.info(f"LLM generated question with config: {question}")
-            return question
+            # Extract token usage
+            tokens_used = response.tokens_used if response.tokens_used > 0 else (
+                response.usage.get('total_tokens', 0) if response.usage else 0
+            )
+            
+            logger.info(f"LLM generated question with config: {question} ({tokens_used} tokens)")
+            return question, tokens_used
             
         except Exception as e:
             logger.error(f"LLM question generation failed with config: {e}")
             logger.info("Falling back to configurable template generation")
-            return self._generate_from_template_with_config(tactic, graph_state, context_node)
+            return self._generate_from_template_with_config(tactic, graph_state, context_node), 0
     
     def _build_generation_context_with_config(self, tactic: SchemaTactic, graph_state: GraphState, 
                                             interview_state: InterviewState, context_node: Optional[Node]) -> Dict[str, Any]:
@@ -235,30 +239,7 @@ class ConfigurableQuestionGenerator:
         # Simple implementation - can be enhanced
         return 1.0 / (node.last_visit_turn + 1) * recency_weight
     
-    async def generate_behavioral_warmup(
-        self,
-        concept: str,
-        category: str,
-        seed_concepts: List[str],
-        forbidden_attributes: List[str]
-    ) -> str:
-        """Generate a behavioral warm-up question using configuration values."""
-        if not self.warmup_generator:
-            return f"What are your thoughts about {concept}?"
-        
-        try:
-            # Use warmup generator with configuration
-            return await self.warmup_generator.generate_warmup(
-                concept=concept,
-                category=category,
-                seed_concepts=seed_concepts,
-                forbidden_attributes=forbidden_attributes,
-                temperature=self.config.llm.question_temperature,
-                max_tokens=self.config.llm.max_tokens
-            )
-        except Exception as e:
-            logger.error(f"Warmup generation failed with config: {e}")
-            return f"What are your thoughts about {concept}?"
+
     
     def get_config_summary(self) -> Dict[str, Any]:
         """Get summary of question generation configuration."""

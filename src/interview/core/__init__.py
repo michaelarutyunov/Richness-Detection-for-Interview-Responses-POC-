@@ -5,13 +5,13 @@ This module contains the fundamental classes and functions for interview process
 including main processors, result handlers, and core data structures.
 """
 
-from .graph_driven_orchestrator import GraphDrivenOrchestrator
-from .graph_needs_detector import GraphNeedsDetector
+from .configurable_orchestrator import ConfigurableGraphDrivenOrchestrator
+from .configurable_graph_needs_detector import ConfigurableGraphNeedsDetector
 from .strategy_selector import StrategySelector
 
 __all__ = [
-    'GraphDrivenOrchestrator',
-    'GraphNeedsDetector', 
+    'ConfigurableGraphDrivenOrchestrator',
+    'ConfigurableGraphNeedsDetector', 
     'StrategySelector'
 ]
 

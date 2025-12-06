@@ -6,12 +6,12 @@ including questioning strategies, response analysis approaches, and evaluation m
 """
 
 from .loader import SchemaDrivenTacticLoader
-from .question_generator import QuestionGenerator
+from .configurable_question_generator import ConfigurableQuestionGenerator
 from .selector import SchemaDrivenTacticSelector
 
 __all__ = [
     'SchemaDrivenTacticLoader',
-    'QuestionGenerator',
+    'ConfigurableQuestionGenerator',
     'SchemaDrivenTacticSelector'
 ]
 

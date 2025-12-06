@@ -86,11 +86,11 @@ def test_v2_components():
         from src.core.models import GraphState, InterviewState
         print("   ✅ Core models imported")
         
-        from src.interview.core import GraphDrivenOrchestrator
-        print("   ✅ GraphDrivenOrchestrator imported")
+        from src.interview.core import ConfigurableGraphDrivenOrchestrator
+        print("   ✅ ConfigurableGraphDrivenOrchestrator imported")
         
-        from src.interview.tactics import QuestionGenerator
-        print("   ✅ QuestionGenerator imported")
+        from src.interview.tactics import ConfigurableQuestionGenerator
+        print("   ✅ ConfigurableQuestionGenerator imported")
         
         from src.interview.tactics import SchemaDrivenTacticLoader as TacticLoader
         print("   ✅ TacticLoader imported")
@@ -113,12 +113,32 @@ def test_orchestrator_creation():
     print("\n🎯 Testing Orchestrator Creation...")
     
     try:
-        from src.interview.core import GraphDrivenOrchestrator
-        from src.interview.tactics import QuestionGenerator
+        from src.interview.core import ConfigurableGraphDrivenOrchestrator
+        from src.interview.tactics import ConfigurableQuestionGenerator
+        from src.config.interview_config_loader import InterviewConfigLoader
+        from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
+        from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor
         
-        # Create without LLM (should work)
-        question_generator = QuestionGenerator(llm_client=None)
-        orchestrator = GraphDrivenOrchestrator(question_generator=question_generator)
+        # Create a mock extraction orchestrator for testing
+        llm_client = None
+        schema_path = "schemas/means_end_chain_v0.2.yaml"
+        prompt_builder = ExtractionPromptBuilder(schema_path)
+        validator = ExtractionValidator(schema_path)
+        response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
+        concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+        
+        extraction_orchestrator = GraphExtractionOrchestrator(
+            response_processor=response_processor,
+            concept_extractor=concept_extractor
+        )
+        
+        # Create configuration loader
+        config_loader = InterviewConfigLoader()
+        
+        orchestrator = ConfigurableGraphDrivenOrchestrator(
+            extraction_orchestrator=extraction_orchestrator,
+            config_loader=config_loader
+        )
         
         print("   ✅ Orchestrator created successfully (template mode)")
         print(f"   📋 Components: {type(orchestrator).__name__}")
@@ -161,13 +181,33 @@ async def test_async_functionality():
     print("\n⚡ Testing Async Functionality...")
     
     try:
-        from src.interview.core import GraphDrivenOrchestrator
-        from src.interview.tactics import QuestionGenerator
+        from src.interview.core import ConfigurableGraphDrivenOrchestrator
+        from src.interview.tactics import ConfigurableQuestionGenerator
         from src.core.models import GraphState, InterviewState
+        from src.config.interview_config_loader import InterviewConfigLoader
+        from src.interview.extraction.graph_extraction_orchestrator import GraphExtractionOrchestrator
+        from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor
         
-        # Create components
-        question_generator = QuestionGenerator(llm_client=None)
-        orchestrator = GraphDrivenOrchestrator(question_generator=question_generator)
+        # Create a mock extraction orchestrator for testing
+        llm_client = None
+        schema_path = "schemas/means_end_chain_v0.2.yaml"
+        prompt_builder = ExtractionPromptBuilder(schema_path)
+        validator = ExtractionValidator(schema_path)
+        response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
+        concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+        
+        extraction_orchestrator = GraphExtractionOrchestrator(
+            response_processor=response_processor,
+            concept_extractor=concept_extractor
+        )
+        
+        # Create configuration loader
+        config_loader = InterviewConfigLoader()
+        
+        orchestrator = ConfigurableGraphDrivenOrchestrator(
+            extraction_orchestrator=extraction_orchestrator,
+            config_loader=config_loader
+        )
         
         # Create test state
         graph_state = GraphState()
