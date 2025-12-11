@@ -1,0 +1,73 @@
+a942f479...,functional_consequence,odd stomach feeling from regular milk,16:17:08,No
+59f2eece...,functional_consequence,stomach heaviness,16:14:46,No
+fd4468dc...,psychosocial_consequence,feel less energetic,16:14:46,No
+eaa79a57...,psychosocial_consequence,unable to focus,16:14:46,No
+796f8470...,functional_consequence,black coffee too bitter,16:14:46,No
+5db4a84f...,functional_consequence,need to add something that smooths coffee,16:14:46,No
+dbcb8ff9...,functional_consequence,water doesn't help smooth coffee,16:14:46,No
+0e15cbf6...,attribute,thin milk,16:09:04,No
+6c1f0f8b...,functional_consequence,not creamy,16:09:04,No
+4ab28c26...,attribute,regular milk,16:07:56,No
+0cf62750...,functional_consequence,odd feeling in stomach,16:07:56,No
+0eed962c...,attribute,switched to semi-skimmed milk,16:07:56,No
+ccc0a7b9...,functional_consequence,stomach feeling improved,16:07:56,No
+5f5344e8...,functional_consequence,skimmed milk too watery,16:07:56,No
+6f6d36df...,attribute,enzyme process,16:04:56,No
+7537eddb...,functional_consequence,clever way to resolve watery oat milk,16:04:56,No
+c2416470...,psychosocial_consequence,pleasant experience,16:03:29,No
+d58fdd86...,functional_consequence,smooths the edge off bitter coffee taste,16:03:29,No
+4fca96dc...,functional_consequence,current oat milk brands disappear into coffee,16:02:12,No
+3fa51fe3...,psychosocial_consequence,does not want thickeners,16:01:39,No
+e9fd072c...,psychosocial_consequence,thickeners do not sound natural,16:01:39,No
+189b997d...,psychosocial_consequence,uncertain if thickeners are natural,16:01:39,No
+4fe1c016...,attribute,different way of manufacturing,16:00:14,No
+d81a9d07...,attribute,food technology,16:00:14,No
+bcf279a3...,attribute,different technology,16:00:14,No
+c09019bb...,functional_consequence,makes it thicker and creamier,16:00:14,No
+3832fb9d...,attribute,watery oat milk,15:58:37,No
+2aceb39d...,psychosocial_consequence,heard about enzymes in healthy food context,15:57:19,No
+d8c934ea...,psychosocial_consequence,do not know much about enzymes,15:57:19,No
+10c198f5...,functional_consequence,enzymes make milk froth more creamy,15:57:19,No
+8f419b1b...,attribute,naturally creamy,15:56:04,No
+68f2db1b...,attribute,froths properly,15:56:04,No
+723e6a86...,psychosocial_consequence,need to try first,15:56:04,No
+89bcdcc3...,psychosocial_consequence,sounds great,15:56:04,No
+73cf789a...,functional_consequence,oat milk is taste-less,15:46:47,No
+cb204078...,functional_consequence,not improving the coffee,15:46:47,No
+4b0e694c...,attribute,add thick froth on black coffee,15:37:11,No
+dedc214d...,functional_consequence,regular milk too heavy on stomach,15:37:11,No
+d12c4097...,attribute,tried oat milk,15:37:11,No
+847e67f8...,functional_consequence,oat milk is watery,15:37:11,No
+de984db1...,psychosocial_consequence,finds concept interesting,15:37:11,No
+
+
+97f32665...,leads_to,add thick froth on black coffee,regular milk too heavy on stomach,add thick froth on black coffee → regular milk too heavy on stomach
+fccdecc3...,leads_to,regular milk too heavy on stomach,tried oat milk,regular milk too heavy on stomach → tried oat milk
+ebaf1fcb...,leads_to,tried oat milk,oat milk is watery,tried oat milk → oat milk is watery
+59d210d7...,leads_to,oat milk is watery,finds concept interesting,oat milk is watery → finds concept interesting
+d763e278...,leads_to,oat milk is watery,not improving the coffee,oat milk is watery → not improving the coffee
+eac6f10b...,leads_to,oat milk is taste-less,not improving the coffee,oat milk is taste-less → not improving the coffee
+832390ca...,leads_to,naturally creamy,sounds great,naturally creamy → sounds great
+9309d962...,leads_to,froths properly,sounds great,froths properly → sounds great
+b21aacb6...,leads_to,sounds great,need to try first,sounds great → need to try first
+21f6e21d...,leads_to,heard about enzymes in healthy food context,do not know much about enzymes,heard about enzymes in healthy food context → do not know much about enzymes
+306560ac...,leads_to,enzymes make milk froth more creamy,sounds great,enzymes make milk froth more creamy → sounds great
+56fae713...,leads_to,watery oat milk,not improving the coffee,watery oat milk → not improving the coffee
+0e9287ce...,leads_to,different way of manufacturing,makes it thicker and creamier,different way of manufacturing → makes it thicker and creamier
+22e1c875...,leads_to,food technology,makes it thicker and creamier,food technology → makes it thicker and creamier
+147a557e...,leads_to,different technology,makes it thicker and creamier,different technology → makes it thicker and creamier
+65275c8e...,leads_to,does not want thickeners,thickeners do not sound natural,does not want thickeners → thickeners do not sound natural
+38935520...,leads_to,thickeners do not sound natural,uncertain if thickeners are natural,thickeners do not sound natural → uncertain if thickeners are natural
+7076bf68...,leads_to,naturally creamy,pleasant experience,naturally creamy → pleasant experience
+fe67fc51...,leads_to,naturally creamy,smooths the edge off bitter coffee taste,naturally creamy → smooths the edge off bitter coffee taste
+2e7ddaa4...,leads_to,enzyme process,clever way to resolve watery oat milk,enzyme process → clever way to resolve watery oat milk
+7757b557...,leads_to,heard about enzymes in healthy food context,enzyme process,heard about enzymes in healthy food context → enzyme process
+11e3b631...,leads_to,regular milk,odd feeling in stomach,regular milk → odd feeling in stomach
+495edac9...,leads_to,switched to semi-skimmed milk,stomach feeling improved,switched to semi-skimmed milk → stomach feeling improved
+8c290af9...,conflicts_with,skimmed milk too watery,switched to semi-skimmed milk,skimmed milk too watery → switched to semi-skimmed milk
+14e3f86a...,leads_to,thin milk,not creamy,thin milk → not creamy
+c4ec9694...,leads_to,stomach heaviness,feel less energetic,stomach heaviness → feel less energetic
+3757ce31...,leads_to,stomach heaviness,unable to focus,stomach heaviness → unable to focus
+dcc05e90...,leads_to,black coffee too bitter,need to add something that smooths coffee,black coffee too bitter → need to add something that smooths coffee
+7fa28142...,conflicts_with,water doesn't help smooth coffee,need to add something that smooths coffee,water doesn't help smooth coffee → need to add something that smooths coffee
+c2cc2bac...,relates_to,current oat milk brands disappear into coffee,odd stomach feeling from regular milk,current oat milk brands disappear into coffee → odd stomach feeling from regular milk

@@ -1,0 +1,111 @@
+# LLM Configuration - Optimized Architecture
+# Single configuration file using the new three-section standard
+# Provider-agnostic extraction specs with easy provider switching
+
+# ============================================================================
+# SECTION 1: MODEL SELECTION - Easy to change
+# ============================================================================
+graph_extraction_model: "deepseek"      # Options: anthropic, kimi, openai, deepseek
+question_generation_model: "kimi" # Options: anthropic, kimi, openai, deepseek
+
+# ============================================================================
+# SECTION 2: EXTRACTION SPECS - Provider-agnostic parameters
+# ============================================================================
+extraction_specs:
+  graph_extraction:
+    temperature: 0.3      # Consistent, focused extraction
+    max_tokens: 1000      # Sufficient for structured data
+    timeout_seconds: 15   # Fast extraction
+    
+  question_generation:
+    temperature: 0.7      # Balanced creativity for questions
+    max_tokens: 300       # Typical question length
+    timeout_seconds: 20   # Adequate for generation
+
+# ============================================================================
+# SECTION 3: PROVIDER SPECS - Provider-specific settings with pricing
+# ============================================================================
+# Models now include:
+#   - name: Model identifier
+#   - request_timeout: API timeout in seconds (optional, defaults to 30s)
+#   - cost_input: USD per 1M input tokens (optional, for cost tracking)
+#   - cost_output: USD per 1M output tokens (optional, for cost tracking)
+# ============================================================================
+providers:
+  kimi:
+    api_key_env: "KIMI_API_KEY"
+    base_url: "https://api.moonshot.ai/v1"
+    request_timeout: 30 # Fallback if model doesn't specify
+    models:
+      graph_extraction:
+        name: "kimi-k2-0905-preview"
+        request_timeout: 30
+        cost_input: 0.60
+        cost_output: 2.50
+      question_generation:
+        name: "kimi-k2-turbo-preview"
+        request_timeout: 45
+        cost_input: 1.15
+        cost_output: 8.00
+
+  anthropic:
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: "https://api.anthropic.com"
+    request_timeout: 45
+    models:
+      graph_extraction:
+        name: "claude-haiku-4-5-20251001"
+        request_timeout: 30
+        cost_input: 1.00
+        cost_output: 5.00
+      question_generation:
+        name: "claude-sonnet-4-5"
+        request_timeout: 45
+        cost_input: 3.00
+        cost_output: 15.00
+
+  openai:
+    api_key_env: "OPENAI_API_KEY"
+    base_url: null
+    organization: null
+    request_timeout: 30
+    models:
+      graph_extraction:
+        name: "gpt-5-mini"
+        request_timeout: 15
+        cost_input: 0.25
+        cost_output: 2.00
+      question_generation:
+        name: "gpt-5"
+        request_timeout: 20
+        cost_input: 1.25
+        cost_output: 10.00
+
+  deepseek:
+    api_key_env: "DEEPSEEK_API_KEY"
+    base_url: "https://api.deepseek.com/"
+    request_timeout: 30
+    models:
+      graph_extraction:
+        name: "deepseek-chat"
+        request_timeout: 30
+        cost_input: 0.27
+        cost_output: 1.10
+      question_generation:
+        name: "deepseek-chat"
+        request_timeout: 45
+        cost_input: 0.27
+        cost_output: 1.10
+
+# ============================================================================
+# SECTION 4: GLOBAL SETTINGS - Optional overrides
+# ============================================================================
+retry_config:
+  max_retries: 2
+  initial_delay_seconds: 1
+  backoff_multiplier: 2
+  max_delay_seconds: 30
+
+rate_limits:
+  requests_per_minute: 60
+  tokens_per_minute: 100000

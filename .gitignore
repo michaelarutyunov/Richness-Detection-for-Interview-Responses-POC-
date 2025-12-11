@@ -214,3 +214,4 @@ notebooks/            # Local experimentation (optional)
 archive*/
 legacy*
 interim*
+.claude/

@@ -1,0 +1,251 @@
+# Universal interview logic - schema agnostic
+
+strategies:
+  # Priority order matters - listed from highest to lowest priority
+  
+  ensure_coverage:
+    intent: >
+      Make sure the respondent has addressed all key elements of the 
+      stimulus. We need their reaction to each part before exploring freely.
+    applies_when: "Coverage gaps exist for reference elements"
+    focus: "The uncovered element"
+    suggested_tactics:
+      - open_element_probe
+      - reaction_elicitation
+    llm_guidance: >
+      Introduce the element naturally, as if you're curious whether they 
+      noticed or thought about it. Don't lead—let them form their own view.
+
+  resolve_ambiguity:
+    intent: >
+      Clarify a vague or unclear concept the respondent mentioned. 
+      We need to understand what they actually mean before building on it.
+    applies_when: "A node is flagged as ambiguous"
+    focus: "The ambiguous node"
+    suggested_tactics:
+      - example_elicitation
+      - specificity_probe
+    llm_guidance: >
+      Ask them to make it concrete. Phrases like "what does that look 
+      like for you?" or "can you give me an example?" work well. 
+      Avoid suggesting interpretations.
+
+  connect_isolate:
+    intent: >
+      Integrate an orphan concept into the broader conversation. 
+      The respondent mentioned this but hasn't connected it to anything else.
+    applies_when: "A node exists with no edges"
+    focus: "The isolated node"
+    suggested_tactics:
+      - relationship_probe
+      - temporal_contrast
+      - upward_linking
+    llm_guidance: >
+      Help them see how this fits with what they've already said. 
+      You might reference another concept they mentioned and ask how 
+      they relate, or ask what led them to this thought.
+
+  resolve_schema_tension:
+    intent: >
+      The respondent connected two concepts in a way that doesn't 
+      fit typical patterns. Explore how they see the relationship.
+    applies_when: "An edge exists between nodes where the relationship is unclear"
+    focus: "The problematic node pair"
+    suggested_tactics:
+      - relationship_probe
+      - causal_chain_probe
+    llm_guidance: >
+      Don't challenge their logic—explore it. Ask them to walk you 
+      through the connection. Their explanation may reveal intermediate 
+      steps or a different framing.
+
+  deepen_branch:
+    intent: >
+      Continue exploring the current line of thinking. 
+      The respondent is engaged and there's more to uncover here.
+    applies_when: "Active branch exists, momentum is adequate, depth target not reached"
+    focus: "Most recent node on active branch"
+    suggested_tactics:
+      - upward_linking
+      - consequence_probe
+      - example_elicitation
+    llm_guidance: >
+      Follow their energy. If they're explaining something, ask what 
+      that leads to or why it matters. Keep it conversational—
+      "and what does that do for you?" often works.
+
+  explore_breadth:
+    intent: >
+      The current branch is saturating. Shift attention to an 
+      underexplored area of the graph.
+    applies_when: "Current branch stalling or at depth target, other nodes underexplored"
+    focus: "Highest-potential unexplored node"
+    suggested_tactics:
+      - return_probe
+      - open_element_probe
+    llm_guidance: >
+      Transition naturally. Acknowledge what they've shared, then 
+      redirect: "You mentioned X earlier—can we come back to that?" 
+      Make it feel like a conversation, not an interrogation.
+
+  introduce_seed:
+    intent: >
+      Open new territory. We've explored existing threads adequately 
+      and need fresh material.
+    applies_when: "All branches exhausted, coverage complete"
+    focus: "None—open-ended"
+    suggested_tactics:
+      - open_probe
+      - hypothetical_probe
+    llm_guidance: >
+      Give them space to surface something new. "Is there anything 
+      else that comes to mind?" or explore a hypothetical: 
+      "If this didn't exist, what would you do instead?"
+
+
+tactics:
+  # Conversational moves - these describe HOW to probe, not WHAT to ask
+  
+  upward_linking:
+    description: >
+      Move from concrete to abstract—ask about consequences, meaning, 
+      or importance. "What does that do for you?" "Why does that matter?"
+  
+  consequence_probe:
+    description: >
+      Explore what results from something—the downstream effects. 
+      "What happens when...?" "What does that lead to?"
+  
+  example_elicitation:
+    description: >
+      Ask for a specific instance, story, or scenario that illustrates 
+      their point. Makes abstract concepts concrete and memorable.
+  
+  specificity_probe:
+    description: >
+      Push past vague language to understand exactly what they mean. 
+      "What specifically about X?" "Which part of that?"
+  
+  relationship_probe:
+    description: >
+      Ask how two concepts connect in their mind. 
+      "How does X relate to Y for you?" "What's the connection between...?"
+  
+  temporal_contrast:
+    description: >
+      Compare across time—before/after, then/now, expected/actual. 
+      Surfaces change, surprise, and unmet expectations.
+  
+  expectation_reality:
+    description: >
+      Explore gaps between what they anticipated and what occurred. 
+      "How did that compare to what you expected?"
+  
+  causal_chain_probe:
+    description: >
+      Walk through the steps between cause and effect. 
+      "Can you walk me through how X leads to Y?"
+  
+  reaction_elicitation:
+    description: >
+      Get their evaluative stance—positive, negative, or mixed. 
+      "What do you make of that?" "How do you feel about...?"
+  
+  open_element_probe:
+    description: >
+      Introduce a topic and invite their unstructured response. 
+      No leading—just open the door and see where they go.
+  
+  return_probe:
+    description: >
+      Circle back to something mentioned earlier. Acknowledge the 
+      shift explicitly: "Earlier you mentioned X—can we revisit that?"
+  
+  open_probe:
+    description: >
+      Completely open-ended invitation for new material. 
+      "What else comes to mind?" "Anything we haven't touched on?"
+  
+  hypothetical_probe:
+    description: >
+      Explore counterfactuals or imagined scenarios.
+      "If this didn't exist, what would you do?" "Imagine if..."
+
+
+# Arbitration configuration for utility-based strategy selection
+# When enabled, replaces first-applicable-wins with multi-scorer evaluation
+arbitration:
+  enabled: true  # Set to false to use legacy first-applicable-wins selection
+
+  scorers:
+    # Prevents repetitive questions (similarity > threshold gets penalized)
+    redundancy:
+      weight: 1.0
+      threshold: 0.85
+      penalty: 0.2
+
+    # Stops drilling topics respondent doesn't know about
+    knowledge_ceiling:
+      weight: 1.0
+      lookback_turns: 3
+      penalty: 0.1
+
+    # Adjusts strategy based on engagement level
+    momentum_alignment:
+      weight: 1.0
+      breadth_boost: 1.5   # Boost for breadth strategies when low momentum
+      depth_penalty: 0.5   # Penalty for depth strategies when low momentum
+      depth_boost: 1.3     # Boost for depth strategies when high momentum
+
+    # Penalizes recently-used strategies for diversity
+    recency_diversity:
+      weight: 0.8
+      lookback_turns: 2
+      penalty: 0.7
+
+    # Boosts vertical exploration when graph is horizontally saturated
+    # Also boosts when approaching value nodes (value ladder completion)
+    vertical_laddering:
+      weight: 1.0  # Increased from 0.8
+      boost: 1.5
+      value_proximity_boost: 1.8  # Boost when near value node
+      value_closure_boost: 2.0    # Strong boost for final ladder step
+      near_value_depth: 2         # Depth from value to trigger boost
+
+    # Detects stale branches and triggers breadth exploration
+    # More aggressive detection to prevent stuck loops
+    branch_health:
+      weight: 1.0  # Increased from 0.7
+      stale_threshold: 2          # Reduced from 3 for faster detection
+      breadth_boost: 1.8          # Increased from 1.5
+      depth_penalty: 0.3          # More severe (was 0.6)
+      severe_stale_threshold: 4   # Very stale branch threshold
+      severe_depth_penalty: 0.1   # Near-zero for very stale
+      connect_isolate_penalty: 0.5  # Also penalize connect_isolate on stale
+
+    # Distinguishes knowledge lack from exploration lack
+    # Hard coverage priority for first-time elements
+    coverage_quality:
+      weight: 1.0  # Increased from 0.9
+      penalty: 0.4
+      boost: 1.2
+      first_touch_boost: 2.5      # Strong boost when focus_count=0
+      exhaustion_threshold: 2     # Turns probing without new edges
+      exhaustion_penalty: 0.15    # Severe penalty for exhausted gaps
+
+    # Controls timing of schema tension resolution
+    # Only resolves when both nodes have been explored
+    schema_tension_readiness:
+      weight: 1.0
+      readiness_boost: 1.6        # Boost when both nodes explored
+      premature_penalty: 0.4      # Penalty for early exploration
+      min_exploration: 1          # Min times each node must be explored
+
+    # Detects when interview should enter reflection/closing mode
+    # Triggers when coverage complete, no new nodes, values exist
+    reflection_mode:
+      weight: 1.0
+      no_new_nodes_threshold: 3   # Turns without new nodes
+      depth_penalty: 0.2          # Heavy penalty for depth strategies
+      reflection_boost: 2.0       # Strong boost for reflection
+      min_value_nodes: 1          # Minimum value nodes required

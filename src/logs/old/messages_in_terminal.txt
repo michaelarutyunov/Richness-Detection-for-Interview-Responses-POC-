@@ -1,0 +1,485 @@
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2044ms, 825 tokens, success=True, has_function_call=False
+2025-12-09 16:00:17 | INFO     | interview.20251209_153123 | [Q7] Strategy: ensure_coverage
+INFO:interview.20251209_153123:[Q7] Strategy: ensure_coverage
+2025-12-09 16:00:17 | INFO     | interview.20251209_153123 | [Q7] Question: What are your thoughts on the idea of unlocking creaminess from the oats themselves, rather than adding thickeners?
+INFO:interview.20251209_153123:[Q7] Question: What are your thoughts on the idea of unlocking creaminess from the oats themselves, rather than adding thickeners?
+INFO:controller:[Turn 7] Response: 148 chars -> +4 nodes, +3 edges | Strategy: ensure_coverage | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 7: nodes=19, edges=15
+INFO:ui.gradio_app:Processed turn 7
+2025-12-09 16:01:34 | INFO     | interview.20251209_153123 | --- Turn 8 ---
+INFO:interview.20251209_153123:--- Turn 8 ---
+2025-12-09 16:01:34 | INFO     | interview.20251209_153123 | [A8] Response: This is good. i definitely do not want any thickeners, it does not sound natural. I have no idea if these thickeners are natural or not.
+INFO:interview.20251209_153123:[A8] Response: This is good. i definitely do not want any thickeners, it does not sound natural. I have no idea if these thickeners are natural or not.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1066ms, 358 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 3878ms, 2495 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['does not want thickeners', 'thickeners do not sound natural', 'uncertain if thickeners are natural']
+INFO:decision.extraction:[Extraction] Edges: [('3fa51fe3-2a65-4561-82d9-eeb89868115c', 'leads_to', 'e9fd072c-aac6-48d7-a8ac-52a1d37582c5'), ('e9fd072c-aac6-48d7-a8ac-52a1d37582c5', 'leads_to', '189b997d-353f-4d7c-a769-8ada410a73f9')]
+INFO:decision.extraction:[Extraction] Element mappings: {'3fa51fe3-2a65-4561-82d9-eeb89868115c': 'rtb', 'e9fd072c-aac6-48d7-a8ac-52a1d37582c5': 'rtb', '189b997d-353f-4d7c-a769-8ada410a73f9': 'rtb'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1314ms, 304 tokens, success=True, has_function_call=False
+2025-12-09 16:01:40 | INFO     | interview.20251209_153123 | [Extract] +3 nodes, +2 edges
+INFO:interview.20251209_153123:[Extract] +3 nodes, +2 edges
+2025-12-09 16:01:40 | INFO     | interview.20251209_153123 | [Momentum] low: ['short response', "hedging/uncertainty ('I have no idea')", 'minimal elaboration', 'no unprompted examples or stories']
+INFO:interview.20251209_153123:[Momentum] low: ['short response', "hedging/uncertainty ('I have no idea')", 'minimal elaboration', 'no unprompted examples or stories']
+WARNING:controller:[Fatigue] Sustained low engagement detected (5 consecutive)
+INFO:controller:[Coverage Update] element 'rtb' covered by node 'does not want thickeners'
+INFO:controller:[Coverage Update] element 'rtb' covered by node 'thickeners do not sound natural'
+INFO:controller:[Coverage Update] element 'rtb' covered by node 'uncertain if thickeners are natural'
+2025-12-09 16:01:40 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:01:40 | INFO     | interview.20251209_153123 | [Graph] isolated=0, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=0, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=4, exhausted=0), isolated=0, ambiguous=0, momentum=low
+INFO:decision.strategy:[Focus] Element 'insight' focus count: 3
+INFO:decision.strategy:[Strategy Selected] ensure_coverage -> Concept element: insight - 'You've tried switching to plant-based milk, but they always taste thin and disappear into your coffe...'
+2025-12-09 16:01:40 | INFO     | interview.20251209_153123 | [Strategy] ensure_coverage -> Concept element: insight - 'You've tried switching to plant-based milk, but they always taste thin and disappear into your coffe...'
+INFO:interview.20251209_153123:[Strategy] ensure_coverage -> Concept element: insight - 'You've tried switching to plant-based milk, but they always taste thin and disappear into your coffe...'
+INFO:generation.generator:[Tactic] Suggested for 'ensure_coverage': ['open_element_probe', 'reaction_elicitation']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1868ms, 892 tokens, success=True, has_function_call=False
+2025-12-09 16:01:42 | INFO     | interview.20251209_153123 | [Q8] Strategy: ensure_coverage
+INFO:interview.20251209_153123:[Q8] Strategy: ensure_coverage
+2025-12-09 16:01:42 | INFO     | interview.20251209_153123 | [Q8] Question: What's your reaction to the idea that plant-based milks can "disappear" into your coffee?
+INFO:interview.20251209_153123:[Q8] Question: What's your reaction to the idea that plant-based milks can "disappear" into your coffee?
+INFO:controller:[Turn 8] Response: 136 chars -> +3 nodes, +2 edges | Strategy: ensure_coverage | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 8: nodes=22, edges=17
+INFO:ui.gradio_app:Processed turn 8
+2025-12-09 16:02:09 | INFO     | interview.20251209_153123 | --- Turn 9 ---
+INFO:interview.20251209_153123:--- Turn 9 ---
+2025-12-09 16:02:09 | INFO     | interview.20251209_153123 | [A9] Response: this is not an idea, this is a reality with current oat milk brands.
+INFO:interview.20251209_153123:[A9] Response: this is not an idea, this is a reality with current oat milk brands.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 938ms, 370 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1742ms, 2336 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['current oat milk brands disappear into coffee']
+INFO:decision.extraction:[Extraction] Element mappings: {'4fca96dc-aed1-405d-bbfa-2534b771c9eb': 'insight'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1299ms, 294 tokens, success=True, has_function_call=False
+2025-12-09 16:02:13 | INFO     | interview.20251209_153123 | [Extract] +1 nodes, +0 edges
+INFO:interview.20251209_153123:[Extract] +1 nodes, +0 edges
+2025-12-09 16:02:13 | INFO     | interview.20251209_153123 | [Momentum] low: ['short response', 'no elaboration', 'no personal example', 'no emotional language', 'minimal energy']
+INFO:interview.20251209_153123:[Momentum] low: ['short response', 'no elaboration', 'no personal example', 'no emotional language', 'minimal energy']
+WARNING:controller:[Fatigue] Sustained low engagement detected (6 consecutive)
+INFO:controller:[Coverage Update] element 'insight' covered by node 'current oat milk brands disappear into coffee'
+2025-12-09 16:02:13 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:02:13 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=3, exhausted=1), isolated=1, ambiguous=0, momentum=low
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight']
+INFO:decision.strategy:[Focus] Element 'promise' focus count: 3
+INFO:decision.strategy:[Strategy Selected] ensure_coverage -> Concept element: promise - 'This oat milk is different — naturally creamy and froths properly'
+2025-12-09 16:02:13 | INFO     | interview.20251209_153123 | [Strategy] ensure_coverage -> Concept element: promise - 'This oat milk is different — naturally creamy and froths properly'
+INFO:interview.20251209_153123:[Strategy] ensure_coverage -> Concept element: promise - 'This oat milk is different — naturally creamy and froths properly'
+INFO:generation.generator:[Tactic] Suggested for 'ensure_coverage': ['open_element_probe', 'reaction_elicitation']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2118ms, 903 tokens, success=True, has_function_call=False
+2025-12-09 16:02:15 | INFO     | interview.20251209_153123 | [Q9] Strategy: ensure_coverage
+INFO:interview.20251209_153123:[Q9] Strategy: ensure_coverage
+2025-12-09 16:02:15 | INFO     | interview.20251209_153123 | [Q9] Question: You mentioned the idea of it being "naturally creamy" sounds great. What does "naturally creamy" mean to you in a product like this?
+INFO:interview.20251209_153123:[Q9] Question: You mentioned the idea of it being "naturally creamy" sounds great. What does "naturally creamy" mean to you in a product like this?
+INFO:controller:[Turn 9] Response: 68 chars -> +1 nodes, +0 edges | Strategy: ensure_coverage | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 9: nodes=23, edges=17
+INFO:ui.gradio_app:Processed turn 9
+2025-12-09 16:03:26 | INFO     | interview.20251209_153123 | --- Turn 10 ---
+INFO:interview.20251209_153123:--- Turn 10 ---
+2025-12-09 16:03:26 | INFO     | interview.20251209_153123 | [A10] Response: It means it pleasant experience, it means it smoothes the edge off the bitter coffee taste.
+INFO:interview.20251209_153123:[A10] Response: It means it pleasant experience, it means it smoothes the edge off the bitter coffee taste.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1095ms, 392 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2756ms, 2463 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['pleasant experience', 'smooths the edge off bitter coffee taste']
+INFO:decision.extraction:[Extraction] Edges: [('naturally creamy', 'leads_to', 'c2416470-1899-4861-a52d-7b3204035146'), ('naturally creamy', 'leads_to', 'd58fdd86-3cce-4bac-aeb1-3ad8a929f908')]
+INFO:decision.extraction:[Extraction] Element mappings: {'c2416470-1899-4861-a52d-7b3204035146': 'promise', 'd58fdd86-3cce-4bac-aeb1-3ad8a929f908': 'promise'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1404ms, 306 tokens, success=True, has_function_call=False
+2025-12-09 16:03:31 | INFO     | interview.20251209_153123 | [Extract] +2 nodes, +2 edges
+INFO:interview.20251209_153123:[Extract] +2 nodes, +2 edges
+2025-12-09 16:03:31 | INFO     | interview.20251209_153123 | [Momentum] neutral: ['brief but clear explanation', 'no hedging or uncertainty', 'lacks elaboration or examples', 'no emotional emphasis']
+INFO:interview.20251209_153123:[Momentum] neutral: ['brief but clear explanation', 'no hedging or uncertainty', 'lacks elaboration or examples', 'no emotional emphasis']
+INFO:controller:[Coverage Update] element 'promise' covered by node 'pleasant experience'
+INFO:controller:[Coverage Update] element 'promise' covered by node 'smooths the edge off bitter coffee taste'
+2025-12-09 16:03:31 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:03:31 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=2, exhausted=2), isolated=1, ambiguous=0, momentum=neutral
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise']
+INFO:decision.strategy:[Focus] Element 'rtb' focus count: 3
+INFO:decision.strategy:[Strategy Selected] ensure_coverage -> Concept element: rtb - 'it's made using an enzyme process that unlocks the creaminess of Scandinavian oats without adding th...'
+2025-12-09 16:03:31 | INFO     | interview.20251209_153123 | [Strategy] ensure_coverage -> Concept element: rtb - 'it's made using an enzyme process that unlocks the creaminess of Scandinavian oats without adding th...'
+INFO:interview.20251209_153123:[Strategy] ensure_coverage -> Concept element: rtb - 'it's made using an enzyme process that unlocks the creaminess of Scandinavian oats without adding th...'
+INFO:generation.generator:[Tactic] Suggested for 'ensure_coverage': ['open_element_probe', 'reaction_elicitation']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1796ms, 931 tokens, success=True, has_function_call=False
+2025-12-09 16:03:33 | INFO     | interview.20251209_153123 | [Q10] Strategy: ensure_coverage
+INFO:interview.20251209_153123:[Q10] Strategy: ensure_coverage
+2025-12-09 16:03:33 | INFO     | interview.20251209_153123 | [Q10] Question: What's your reaction to the idea of using an enzyme process to unlock creaminess?
+INFO:interview.20251209_153123:[Q10] Question: What's your reaction to the idea of using an enzyme process to unlock creaminess?
+INFO:controller:[Turn 10] Response: 91 chars -> +2 nodes, +2 edges | Strategy: ensure_coverage | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 10: nodes=25, edges=19
+INFO:ui.gradio_app:Processed turn 10
+2025-12-09 16:04:51 | INFO     | interview.20251209_153123 | --- Turn 11 ---
+INFO:interview.20251209_153123:--- Turn 11 ---
+2025-12-09 16:04:51 | INFO     | interview.20251209_153123 | [A11] Response: I am OK with that. As i said, I heard about enzymes in the context of discussions about healthy food. I guess it is a clever way to resolve the problem of oat milk being too watery.
+INFO:interview.20251209_153123:[A11] Response: I am OK with that. As i said, I heard about enzymes in the context of discussions about healthy food. I guess it is a clever way to resolve the problem of oat milk being too watery.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1182ms, 398 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 3480ms, 2545 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['enzyme process', 'clever way to resolve watery oat milk']
+INFO:decision.extraction:[Extraction] Edges: [('6f6d36df-2cbc-4ea8-bb72-72ffd3b07700', 'leads_to', '7537eddb-226b-4f74-aa9e-3f2b8b197630'), ('heard about enzymes in healthy food context', 'leads_to', '6f6d36df-2cbc-4ea8-bb72-72ffd3b07700')]
+INFO:decision.extraction:[Extraction] Element mappings: {'6f6d36df-2cbc-4ea8-bb72-72ffd3b07700': 'rtb', '7537eddb-226b-4f74-aa9e-3f2b8b197630': 'rtb'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1302ms, 338 tokens, success=True, has_function_call=False
+2025-12-09 16:04:57 | INFO     | interview.20251209_153123 | [Extract] +2 nodes, +2 edges
+INFO:interview.20251209_153123:[Extract] +2 nodes, +2 edges
+2025-12-09 16:04:57 | INFO     | interview.20251209_153123 | [Momentum] low: ['short response', "hedging language ('I guess')", "repetition of prior acceptance ('As I said')", 'minimal elaboration', 'no new examples or stories']
+INFO:interview.20251209_153123:[Momentum] low: ['short response', "hedging language ('I guess')", "repetition of prior acceptance ('As I said')", 'minimal elaboration', 'no new examples or stories']
+INFO:controller:[Coverage Update] element 'rtb' covered by node 'enzyme process'
+INFO:controller:[Coverage Update] element 'rtb' covered by node 'clever way to resolve watery oat milk'
+2025-12-09 16:04:57 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:04:57 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=1, ambiguous=0, momentum=low
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy] Low momentum: deferring connect_isolate
+INFO:decision.strategy:[Strategy Selected] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+2025-12-09 16:04:57 | INFO     | interview.20251209_153123 | [Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:interview.20251209_153123:[Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:generation.generator:[Tactic] Suggested for 'resolve_schema_tension': ['relationship_probe', 'causal_chain_probe']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2195ms, 1008 tokens, success=True, has_function_call=False
+2025-12-09 16:04:59 | INFO     | interview.20251209_153123 | [Q11] Strategy: resolve_schema_tension
+INFO:interview.20251209_153123:[Q11] Strategy: resolve_schema_tension
+2025-12-09 16:04:59 | INFO     | interview.20251209_153123 | [Q11] Question: You mentioned that regular milk is too heavy on your stomach, which led you to try oat milk. Can you walk me through how that heaviness specifically made you decide to switch?
+INFO:interview.20251209_153123:[Q11] Question: You mentioned that regular milk is too heavy on your stomach, which led you to try oat milk. Can you walk me through how that heaviness specifically made you decide to switch?
+INFO:controller:[Turn 11] Response: 181 chars -> +2 nodes, +2 edges | Strategy: resolve_schema_tension | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 11: nodes=27, edges=21
+INFO:ui.gradio_app:Processed turn 11
+2025-12-09 16:07:49 | INFO     | interview.20251209_153123 | --- Turn 12 ---
+INFO:interview.20251209_153123:--- Turn 12 ---
+2025-12-09 16:07:49 | INFO     | interview.20251209_153123 | [A12] Response: Well, i am used to drink coffee with regular milk. But i noticed it about a year or two ago that after a cup of coffee i get this odd feeling in the stomach. And then i heard that it can be due to the...
+INFO:interview.20251209_153123:[A12] Response: Well, i am used to drink coffee with regular milk. But i noticed it about a year or two ago that after a cup of coffee i get this odd feeling in the stomach. And then i heard that it can be due to the...
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1351ms, 463 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 5926ms, 2729 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['regular milk', 'odd feeling in stomach', 'switched to semi-skimmed milk', 'stomach feeling improved', 'skimmed milk too watery']
+INFO:decision.extraction:[Extraction] Edges: [('4ab28c26-d161-4962-a0aa-3dd3b19ba0c9', 'leads_to', '0cf62750-6c8c-4dfe-a764-ac26b83af613'), ('0eed962c-40a9-40b3-8c5b-911ef743b993', 'leads_to', 'ccc0a7b9-4d90-4838-8b36-ef90e2c4040e'), ('5f5344e8-d41b-416e-a56d-51dcef6af892', 'conflicts_with', '0eed962c-40a9-40b3-8c5b-911ef743b993')]
+INFO:decision.extraction:[Extraction] Element mappings: {'0cf62750-6c8c-4dfe-a764-ac26b83af613': 'insight', 'ccc0a7b9-4d90-4838-8b36-ef90e2c4040e': 'insight', '5f5344e8-d41b-416e-a56d-51dcef6af892': 'insight'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1553ms, 372 tokens, success=True, has_function_call=False
+2025-12-09 16:07:57 | INFO     | interview.20251209_153123 | [Extract] +5 nodes, +3 edges
+INFO:interview.20251209_153123:[Extract] +5 nodes, +3 edges
+2025-12-09 16:07:57 | INFO     | interview.20251209_153123 | [Momentum] high: ['long elaborated response', 'unprompted personal story', 'self-initiated sequence of events', 'specific time reference', "emotional descriptor ('odd feeling')"]
+INFO:interview.20251209_153123:[Momentum] high: ['long elaborated response', 'unprompted personal story', 'self-initiated sequence of events', 'specific time reference', "emotional descriptor ('odd feeling')"]
+INFO:controller:[Coverage Update] element 'insight' covered by node 'odd feeling in stomach'
+INFO:controller:[Coverage Update] element 'insight' covered by node 'stomach feeling improved'
+INFO:controller:[Coverage Update] element 'insight' covered by node 'skimmed milk too watery'
+2025-12-09 16:07:57 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:07:57 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=1, ambiguous=0, momentum=high
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy Selected] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+2025-12-09 16:07:57 | INFO     | interview.20251209_153123 | [Strategy] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+INFO:interview.20251209_153123:[Strategy] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+INFO:generation.generator:[Tactic] Suggested for 'connect_isolate': ['relationship_probe', 'temporal_contrast', 'upward_linking']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2417ms, 1142 tokens, success=True, has_function_call=False
+2025-12-09 16:08:00 | INFO     | interview.20251209_153123 | [Q12] Strategy: connect_isolate
+INFO:interview.20251209_153123:[Q12] Strategy: connect_isolate
+2025-12-09 16:08:00 | INFO     | interview.20251209_153123 | [Q12] Question: Earlier you mentioned that current oat milk brands can disappear into your coffee—how does that experience relate to your search for something that's naturally creamy?
+INFO:interview.20251209_153123:[Q12] Question: Earlier you mentioned that current oat milk brands can disappear into your coffee—how does that experience relate to your search for something that's naturally creamy?
+INFO:controller:[Turn 12] Response: 313 chars -> +5 nodes, +3 edges | Strategy: connect_isolate | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 12: nodes=32, edges=24
+INFO:ui.gradio_app:Processed turn 12
+2025-12-09 16:09:01 | INFO     | interview.20251209_153123 | --- Turn 13 ---
+INFO:interview.20251209_153123:--- Turn 13 ---
+2025-12-09 16:09:01 | INFO     | interview.20251209_153123 | [A13] Response: It relates directly. if the milk is thin, then it is not creamy.
+INFO:interview.20251209_153123:[A13] Response: It relates directly. if the milk is thin, then it is not creamy.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1077ms, 456 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2429ms, 2472 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['thin milk', 'not creamy']
+INFO:decision.extraction:[Extraction] Edges: [('0e15cbf6-54ab-4c3b-bb0e-cfd543315f5d', 'leads_to', '6c1f0f8b-f4e1-4844-a9d5-400d8681ea42')]
+INFO:decision.extraction:[Extraction] Element mappings: {'0e15cbf6-54ab-4c3b-bb0e-cfd543315f5d': 'insight', '6c1f0f8b-f4e1-4844-a9d5-400d8681ea42': 'insight'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1301ms, 301 tokens, success=True, has_function_call=False
+2025-12-09 16:09:06 | INFO     | interview.20251209_153123 | [Extract] +2 nodes, +1 edges
+INFO:interview.20251209_153123:[Extract] +2 nodes, +1 edges
+2025-12-09 16:09:06 | INFO     | interview.20251209_153123 | [Momentum] low: ['short response', 'minimal elaboration', 'no unprompted examples', 'no emotional language']
+INFO:interview.20251209_153123:[Momentum] low: ['short response', 'minimal elaboration', 'no unprompted examples', 'no emotional language']
+INFO:controller:[Coverage Update] element 'insight' covered by node 'thin milk'
+INFO:controller:[Coverage Update] element 'insight' covered by node 'not creamy'
+2025-12-09 16:09:06 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:09:06 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=1, ambiguous=0, momentum=low
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy] Low momentum: deferring connect_isolate
+INFO:decision.strategy:[Strategy Selected] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+2025-12-09 16:09:06 | INFO     | interview.20251209_153123 | [Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:interview.20251209_153123:[Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:generation.generator:[Tactic] Suggested for 'resolve_schema_tension': ['relationship_probe', 'causal_chain_probe']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2416ms, 1175 tokens, success=True, has_function_call=False
+2025-12-09 16:09:08 | INFO     | interview.20251209_153123 | [Q13] Strategy: resolve_schema_tension
+INFO:interview.20251209_153123:[Q13] Strategy: resolve_schema_tension
+2025-12-09 16:09:08 | INFO     | interview.20251209_153123 | [Q13] Question: You mentioned that regular milk gave you an odd stomach feeling, which led you to try oat milk. Can you walk me through what specifically about that feeling made oat milk seem like the right alternative to try?
+INFO:interview.20251209_153123:[Q13] Question: You mentioned that regular milk gave you an odd stomach feeling, which led you to try oat milk. Can you walk me through what specifically about that feeling made oat milk seem like the right alternative to try?
+INFO:controller:[Turn 13] Response: 64 chars -> +2 nodes, +1 edges | Strategy: resolve_schema_tension | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 13: nodes=34, edges=25
+INFO:ui.gradio_app:Processed turn 13
+2025-12-09 16:14:40 | INFO     | interview.20251209_153123 | --- Turn 14 ---
+INFO:interview.20251209_153123:--- Turn 14 ---
+2025-12-09 16:14:40 | INFO     | interview.20251209_153123 | [A14] Response: This stomach heaviness made me feel less energetic, unable to focus. I did not want to give up on coffee but i find the black coffee to be too bitter. So i do need to add something that smooths it. Wa...
+INFO:interview.20251209_153123:[A14] Response: This stomach heaviness made me feel less energetic, unable to focus. I did not want to give up on coffee but i find the black coffee to be too bitter. So i do need to add something that smooths it. Wa...
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1028ms, 519 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 5787ms, 2879 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['stomach heaviness', 'feel less energetic', 'unable to focus', 'black coffee too bitter', 'need to add something that smooths coffee', "water doesn't help smooth coffee"]
+INFO:decision.extraction:[Extraction] Edges: [('59f2eece-3257-4996-b30c-44f4500ecc28', 'leads_to', 'fd4468dc-086a-4a6e-8068-a41125314cea'), ('59f2eece-3257-4996-b30c-44f4500ecc28', 'leads_to', 'eaa79a57-f47f-4edd-8df7-9bc9c9f95ed3'), ('796f8470-57a7-4d29-8413-6ade5c553881', 'leads_to', '5db4a84f-00bd-4370-8c69-813434f8622c'), ('dbcb8ff9-8080-47b1-95e3-83656d3a9c3c', 'conflicts_with', '5db4a84f-00bd-4370-8c69-813434f8622c')]
+INFO:decision.extraction:[Extraction] Element mappings: {'59f2eece-3257-4996-b30c-44f4500ecc28': 'insight', 'fd4468dc-086a-4a6e-8068-a41125314cea': 'insight', 'eaa79a57-f47f-4edd-8df7-9bc9c9f95ed3': 'insight'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1529ms, 368 tokens, success=True, has_function_call=False
+2025-12-09 16:14:48 | INFO     | interview.20251209_153123 | [Extract] +6 nodes, +4 edges
+INFO:interview.20251209_153123:[Extract] +6 nodes, +4 edges
+2025-12-09 16:14:48 | INFO     | interview.20251209_153123 | [Momentum] high: ['elaborated description of personal experience', "emotional language ('made me feel less energetic', 'did not want to give up')", 'self-initiated problem-solving narrative', "specific sensory detail ('too bitter', 'water doesn't help')"]
+INFO:interview.20251209_153123:[Momentum] high: ['elaborated description of personal experience', "emotional language ('made me feel less energetic', 'did not want to give up')", 'self-initiated problem-solving narrative', "specific sensory detail ('too bitter', 'water doesn't help')"]
+INFO:controller:[Coverage Update] element 'insight' covered by node 'stomach heaviness'
+INFO:controller:[Coverage Update] element 'insight' covered by node 'feel less energetic'
+INFO:controller:[Coverage Update] element 'insight' covered by node 'unable to focus'
+2025-12-09 16:14:48 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:14:48 | INFO     | interview.20251209_153123 | [Graph] isolated=1, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=1, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=1, ambiguous=0, momentum=high
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy Selected] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+2025-12-09 16:14:48 | INFO     | interview.20251209_153123 | [Strategy] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+INFO:interview.20251209_153123:[Strategy] connect_isolate -> Node: 'current oat milk brands disappear into coffee' (type: functional_consequence)
+INFO:generation.generator:[Tactic] Suggested for 'connect_isolate': ['relationship_probe', 'temporal_contrast', 'upward_linking']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1867ms, 1308 tokens, success=True, has_function_call=False
+2025-12-09 16:14:50 | INFO     | interview.20251209_153123 | [Q14] Strategy: connect_isolate
+INFO:interview.20251209_153123:[Q14] Strategy: connect_isolate
+2025-12-09 16:14:50 | INFO     | interview.20251209_153123 | [Q14] Question: How does the way current oat milk brands disappear into your coffee connect to that odd stomach feeling you got from regular milk?
+INFO:interview.20251209_153123:[Q14] Question: How does the way current oat milk brands disappear into your coffee connect to that odd stomach feeling you got from regular milk?
+INFO:controller:[Turn 14] Response: 247 chars -> +6 nodes, +4 edges | Strategy: connect_isolate | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 14: nodes=40, edges=29
+INFO:ui.gradio_app:Processed turn 14
+2025-12-09 16:15:12 | INFO     | interview.20251209_153123 | --- Turn 15 ---
+INFO:interview.20251209_153123:--- Turn 15 ---
+2025-12-09 16:15:12 | INFO     | interview.20251209_153123 | [A15] Response: I am not sure, i do not think it connects.
+INFO:interview.20251209_153123:[A15] Response: I am not sure, i do not think it connects.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1290ms, 495 tokens, success=True, has_function_call=False
+2025-12-09 16:15:13 | INFO     | interview.20251209_153123 | [Extract] Not extractable - clarification needed
+INFO:interview.20251209_153123:[Extract] Not extractable - clarification needed
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1988ms, 314 tokens, success=True, has_function_call=False
+2025-12-09 16:15:15 | INFO     | interview.20251209_153123 | [Q15] Strategy: clarification
+INFO:interview.20251209_153123:[Q15] Strategy: clarification
+2025-12-09 16:15:15 | INFO     | interview.20251209_153123 | [Q15] Question: When you say it doesn't connect, what comes to mind about the two experiences?
+INFO:interview.20251209_153123:[Q15] Question: When you say it doesn't connect, what comes to mind about the two experiences?
+INFO:ui.gradio_app:Processed turn 15
+2025-12-09 16:15:26 | INFO     | interview.20251209_153123 | --- Turn 16 ---
+INFO:interview.20251209_153123:--- Turn 16 ---
+2025-12-09 16:15:26 | INFO     | interview.20251209_153123 | [A16] Response: Nothing.
+INFO:interview.20251209_153123:[A16] Response: Nothing.
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1365ms, 411 tokens, success=True, has_function_call=False
+2025-12-09 16:15:27 | INFO     | interview.20251209_153123 | [Extract] Not extractable - clarification needed
+INFO:interview.20251209_153123:[Extract] Not extractable - clarification needed
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1745ms, 278 tokens, success=True, has_function_call=False
+2025-12-09 16:15:29 | INFO     | interview.20251209_153123 | [Q16] Strategy: clarification
+INFO:interview.20251209_153123:[Q16] Strategy: clarification
+2025-12-09 16:15:29 | INFO     | interview.20251209_153123 | [Q16] Question: Can you tell me a bit more about what you mean by "nothing"?
+INFO:interview.20251209_153123:[Q16] Question: Can you tell me a bit more about what you mean by "nothing"?
+INFO:ui.gradio_app:Processed turn 16
+2025-12-09 16:15:46 | INFO     | interview.20251209_153123 | --- Turn 17 ---
+INFO:interview.20251209_153123:--- Turn 17 ---
+2025-12-09 16:15:46 | INFO     | interview.20251209_153123 | [A17] Response: its just nothing
+INFO:interview.20251209_153123:[A17] Response: its just nothing
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1222ms, 383 tokens, success=True, has_function_call=False
+2025-12-09 16:15:47 | INFO     | interview.20251209_153123 | [Extract] Not extractable - clarification needed
+INFO:interview.20251209_153123:[Extract] Not extractable - clarification needed
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2009ms, 234 tokens, success=True, has_function_call=False
+2025-12-09 16:15:49 | INFO     | interview.20251209_153123 | [Q17] Strategy: clarification
+INFO:interview.20251209_153123:[Q17] Strategy: clarification
+2025-12-09 16:15:49 | INFO     | interview.20251209_153123 | [Q17] Question: When you say it's just nothing, what does that nothing feel like or look like to you?
+INFO:interview.20251209_153123:[Q17] Question: When you say it's just nothing, what does that nothing feel like or look like to you?
+INFO:ui.gradio_app:Processed turn 17
+2025-12-09 16:17:04 | INFO     | interview.20251209_153123 | --- Turn 18 ---
+INFO:interview.20251209_153123:--- Turn 18 ---
+2025-12-09 16:17:04 | INFO     | interview.20251209_153123 | [A18] Response: I just meant the way current oat milk brands disappear into coffee does not connect to that odd stomach feeling from regular milk
+INFO:interview.20251209_153123:[A18] Response: I just meant the way current oat milk brands disappear into coffee does not connect to that odd stomach feeling from regular milk
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1078ms, 314 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2334ms, 2349 tokens, success=True, has_function_call=True
+INFO:decision.extraction:[Extraction] Nodes: ['odd stomach feeling from regular milk']
+INFO:decision.extraction:[Extraction] Edges: [('current oat milk brands disappear into coffee', 'relates_to', 'a942f479-d5db-4b72-8173-15d4d229de88')]
+INFO:decision.extraction:[Extraction] Element mappings: {'a942f479-d5db-4b72-8173-15d4d229de88': 'insight'}
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1663ms, 277 tokens, success=True, has_function_call=False
+2025-12-09 16:17:09 | INFO     | interview.20251209_153123 | [Extract] +1 nodes, +1 edges
+INFO:interview.20251209_153123:[Extract] +1 nodes, +1 edges
+2025-12-09 16:17:09 | INFO     | interview.20251209_153123 | [Momentum] low: ['short, minimal expansion', "hedging language ('I just meant')", 'no volunteered examples or stories', 'flat, matter-of-fact tone', 'no emotional emphasis']
+INFO:interview.20251209_153123:[Momentum] low: ['short, minimal expansion', "hedging language ('I just meant')", 'no volunteered examples or stories', 'flat, matter-of-fact tone', 'no emotional emphasis']
+INFO:controller:[Coverage Update] element 'insight' covered by node 'odd stomach feeling from regular milk'
+2025-12-09 16:17:09 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:17:09 | INFO     | interview.20251209_153123 | [Graph] isolated=0, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=0, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=0, ambiguous=0, momentum=low
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy Input] Exhausted nodes: ['4fca96dc-aed1-405d-bbfa-2534b771c9eb']
+INFO:decision.strategy:[Strategy Selected] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+2025-12-09 16:17:09 | INFO     | interview.20251209_153123 | [Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:interview.20251209_153123:[Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:generation.generator:[Tactic] Suggested for 'resolve_schema_tension': ['relationship_probe', 'causal_chain_probe']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2046ms, 1141 tokens, success=True, has_function_call=False
+2025-12-09 16:17:11 | INFO     | interview.20251209_153123 | [Q18] Strategy: resolve_schema_tension
+INFO:interview.20251209_153123:[Q18] Strategy: resolve_schema_tension
+2025-12-09 16:17:11 | INFO     | interview.20251209_153123 | [Q18] Question: Can you walk me through how the heaviness from regular milk led you to try oat milk specifically?
+INFO:interview.20251209_153123:[Q18] Question: Can you walk me through how the heaviness from regular milk led you to try oat milk specifically?
+INFO:controller:[Turn 18] Response: 129 chars -> +1 nodes, +1 edges | Strategy: resolve_schema_tension | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 18: nodes=41, edges=30
+INFO:ui.gradio_app:Processed turn 18
+2025-12-09 16:17:46 | INFO     | interview.20251209_153123 | --- Turn 19 ---
+INFO:interview.20251209_153123:--- Turn 19 ---
+2025-12-09 16:17:46 | INFO     | interview.20251209_153123 | [A19] Response: i got nothing to add to what i already said
+INFO:interview.20251209_153123:[A19] Response: i got nothing to add to what i already said
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1266ms, 342 tokens, success=True, has_function_call=False
+2025-12-09 16:17:48 | INFO     | interview.20251209_153123 | [Extract] Not extractable - clarification needed
+INFO:interview.20251209_153123:[Extract] Not extractable - clarification needed
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2461ms, 257 tokens, success=True, has_function_call=False
+2025-12-09 16:17:50 | INFO     | interview.20251209_153123 | [Q19] Strategy: clarification
+INFO:interview.20251209_153123:[Q19] Strategy: clarification
+2025-12-09 16:17:50 | INFO     | interview.20251209_153123 | [Q19] Question: When you say you have nothing to add, could you help me understand what you feel you’ve already covered?
+INFO:interview.20251209_153123:[Q19] Question: When you say you have nothing to add, could you help me understand what you feel you’ve already covered?
+INFO:ui.gradio_app:Processed turn 19
+2025-12-09 16:36:25 | INFO     | interview.20251209_153123 | --- Turn 20 ---
+INFO:interview.20251209_153123:--- Turn 20 ---
+2025-12-09 16:36:25 | INFO     | interview.20251209_153123 | [A20] Response: Well, I think I've covered the main points. The insight  about plant-based milks being thin really resonates with my experience - I've tried several brands and they all seem to disappear into my coffe...
+INFO:interview.20251209_153123:[A20] Response: Well, I think I've covered the main points. The insight  about plant-based milks being thin really resonates with my experience - I've tried several brands and they all seem to disappear into my coffe...
+INFO:utils.llm_manager:[LLM Call] extractability_check via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 2081ms, 497 tokens, success=True, has_function_call=False
+INFO:utils.llm_manager:[LLM Call] graph_extraction via kimi/kimi-k2-turbo-preview (with tools)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 14308ms, 3388 tokens, success=True, has_function_call=True
+INFO:utils.llm_manager:[LLM Call] momentum_assessment via kimi/kimi-k2-turbo-preview (standard)
+INFO:httpx:HTTP Request: POST https://api.moonshot.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1679ms, 454 tokens, success=True, has_function_call=False
+2025-12-09 16:36:43 | INFO     | interview.20251209_153123 | [Extract] Not extractable - clarification needed
+INFO:interview.20251209_153123:[Extract] Not extractable - clarification needed
+2025-12-09 16:36:43 | INFO     | interview.20251209_153123 | [Momentum] neutral: ['elaborated responses with examples', 'emotional language (frustrating, skeptical)', 'self-initiated connections between concepts', 'some hedging (I guess, need to try it)', 'overall balanced tone without high energy']
+INFO:interview.20251209_153123:[Momentum] neutral: ['elaborated responses with examples', 'emotional language (frustrating, skeptical)', 'self-initiated connections between concepts', 'some hedging (I guess, need to try it)', 'overall balanced tone without high energy']
+2025-12-09 16:36:43 | INFO     | interview.20251209_153123 | [Coverage] 4 gaps remaining
+INFO:interview.20251209_153123:[Coverage] 4 gaps remaining
+2025-12-09 16:36:43 | INFO     | interview.20251209_153123 | [Graph] isolated=0, ambiguous=0, terminals=0
+INFO:interview.20251209_153123:[Graph] isolated=0, ambiguous=0, terminals=0
+INFO:decision.strategy:[Strategy Input] coverage_gaps=4 (non-exhausted=0, exhausted=3), isolated=0, ambiguous=0, momentum=neutral
+INFO:decision.strategy:[Strategy Input] Exhausted elements: ['insight', 'promise', 'rtb']
+INFO:decision.strategy:[Strategy Input] Exhausted nodes: ['4fca96dc-aed1-405d-bbfa-2534b771c9eb']
+INFO:decision.strategy:[Strategy Selected] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+2025-12-09 16:36:43 | INFO     | interview.20251209_153123 | [Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:interview.20251209_153123:[Strategy] resolve_schema_tension -> Node pair: 'regular milk too heavy on stomach' and 'tried oat milk'
+INFO:generation.generator:[Tactic] Suggested for 'resolve_schema_tension': ['relationship_probe', 'causal_chain_probe']
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1864ms, 1083 tokens, success=True, has_function_call=False
+WARNING:generation.generator:[Dedup] Attempt 1: duplicate detected, retrying...
+INFO:utils.llm_manager:[LLM Call] question_generation via deepseek/deepseek-chat (standard)
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:utils.llm_manager:[LLM Result] 1994ms, 1136 tokens, success=True, has_function_call=False
+2025-12-09 16:36:46 | INFO     | interview.20251209_153123 | [Q20] Strategy: resolve_schema_tension
+INFO:interview.20251209_153123:[Q20] Strategy: resolve_schema_tension
+2025-12-09 16:36:46 | INFO     | interview.20251209_153123 | [Q20] Question: What was it about the heaviness from regular milk that made oat milk seem like the right alternative to try?
+INFO:interview.20251209_153123:[Q20] Question: What was it about the heaviness from regular milk that made oat milk seem like the right alternative to try?
+INFO:controller:[Turn 20] Response: 933 chars -> +0 nodes, +0 edges | Strategy: resolve_schema_tension | Coverage: 4 gaps
+INFO:controller:[Graph Growth] Turn 20: nodes=41, edges=30
+INFO:ui.gradio_app:Processed turn 20
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | --- Turn 21 ---
+INFO:interview.20251209_153123:--- Turn 21 ---
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | [A21] Response: It was really about finding that sweet spot. The regular milk made me feel sluggish and uncomfortable - like I had this heavy, almost queasy feeling that made it hard to concentrate. But black coffee ...
+INFO:interview.20251209_153123:[A21] Response: It was really about finding that sweet spot. The regular milk made me feel sluggish and uncomfortable - like I had this heavy, almost queasy feeling that made it hard to concentrate. But black coffee ...
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Interview closing: max_turns_reached
+INFO:interview.20251209_153123:Interview closing: max_turns_reached
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | ============================================================
+INFO:interview.20251209_153123:============================================================
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | SESSION END: 20251209_153123
+INFO:interview.20251209_153123:SESSION END: 20251209_153123
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Total turns: 20
+INFO:interview.20251209_153123:Total turns: 20
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Nodes: 41
+INFO:interview.20251209_153123:Nodes: 41
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Edges: 30
+INFO:interview.20251209_153123:Edges: 30
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Coverage satisfied: False
+INFO:interview.20251209_153123:Coverage satisfied: False
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | Completion reason: max_turns_reached
+INFO:interview.20251209_153123:Completion reason: max_turns_reached
+2025-12-09 16:38:34 | INFO     | interview.20251209_153123 | ============================================================
+INFO:interview.20251209_153123:============================================================
+INFO:ui.gradio_app:Processed turn 20

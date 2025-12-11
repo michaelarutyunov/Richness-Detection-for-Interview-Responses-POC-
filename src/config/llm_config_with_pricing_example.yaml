@@ -1,0 +1,95 @@
+# LLM Configuration - WITH PRICING EXAMPLE
+# Demonstrates the new nested model configuration with integrated pricing
+
+# ============================================================================
+# SECTION 1: MODEL SELECTION - Easy to change
+# ============================================================================
+graph_extraction_model: "kimi"      # Options: anthropic, kimi, openai, deepseek
+question_generation_model: "kimi" # Options: anthropic, kimi, openai, deepseek
+
+# ============================================================================
+# SECTION 2: EXTRACTION SPECS - Provider-agnostic parameters
+# ============================================================================
+extraction_specs:
+  graph_extraction:
+    temperature: 0.3      # Consistent, focused extraction
+    max_tokens: 1000      # Sufficient for structured data
+    timeout_seconds: 15   # Fast extraction
+
+  question_generation:
+    temperature: 0.7      # Balanced creativity for questions
+    max_tokens: 300       # Typical question length
+    timeout_seconds: 20   # Adequate for generation
+
+# ============================================================================
+# SECTION 3: PROVIDER SPECS - With nested model configuration and pricing
+# ============================================================================
+providers:
+  kimi:
+    api_key_env: "KIMI_API_KEY"
+    base_url: "https://api.moonshot.ai/v1"
+    request_timeout: 30
+    models:
+      graph_extraction:
+        name: "kimi-k2-turbo-preview"
+        request_timeout: 25             # Override: faster for extraction
+        cost_input: 1.15                # USD per 1M input tokens
+        cost_output: 8.00               # USD per 1M output tokens
+      question_generation:
+        name: "kimi-k2-turbo-preview"
+        request_timeout: 30             # Use default timeout
+        cost_input: 1.15
+        cost_output: 8.00
+
+  anthropic:
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: "https://api.anthropic.com"
+    request_timeout: 45
+    models:
+      graph_extraction:
+        name: "claude-haiku-4-5-20251001"
+        request_timeout: 40
+        cost_input: 0.80                # Haiku pricing
+        cost_output: 4.00
+      question_generation:
+        name: "claude-sonnet-4-5"
+        request_timeout: 60             # Longer timeout for complex generation
+        cost_input: 3.00                # Sonnet pricing
+        cost_output: 15.00
+
+  openai:
+    api_key_env: "OPENAI_API_KEY"
+    base_url: null
+    organization: null
+    request_timeout: 30
+    models:
+      graph_extraction:
+        name: "gpt-4o-mini"
+        cost_input: 0.15                # GPT-4o-mini pricing
+        cost_output: 0.60
+      question_generation:
+        name: "gpt-4o"
+        cost_input: 2.50                # GPT-4o pricing
+        cost_output: 10.00
+
+  deepseek:
+    api_key_env: "DEEPSEEK_API_KEY"
+    base_url: "https://api.deepseek.com/"
+    request_timeout: 30
+    models:
+      # Backward compatibility: string models still work
+      graph_extraction: "deepseek-chat"
+      question_generation: "deepseek-chat"
+
+# ============================================================================
+# SECTION 4: GLOBAL SETTINGS - Optional overrides
+# ============================================================================
+retry_config:
+  max_retries: 2
+  initial_delay_seconds: 1
+  backoff_multiplier: 2
+  max_delay_seconds: 30
+
+rate_limits:
+  requests_per_minute: 60
+  tokens_per_minute: 100000

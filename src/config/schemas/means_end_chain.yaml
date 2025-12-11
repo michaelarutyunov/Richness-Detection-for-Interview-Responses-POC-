@@ -1,0 +1,145 @@
+# Means-End Chain Schema
+# Defines node types, edge types, and extraction guidance for this methodology
+
+schema:
+  name: "means_end_chain"
+  description: "Means-End Chain analysis linking product attributes to personal values through functional and psychosocial consequences."
+  version: "3.0.0"
+
+  node_types:
+    attribute:
+      name: "attribute"
+      description: "Concrete observable product features"
+      is_terminal: false
+      llm_prompt: |
+        Physical characteristics or features that can be directly observed or measured.
+        Examples: 'blue color', '500ml volume', 'smooth texture', 'contains caffeine', 'made of leather', 'has touchscreen'
+        NOT: benefits, outcomes, feelings, or why it matters - only what IS observable.
+      examples:
+        - "blue color"
+        - "500ml volume"
+        - "smooth texture"
+        - "contains caffeine"
+
+    functional_consequence:
+      name: "functional_consequence"
+      description: "Direct, tangible outcomes from using the product"
+      is_terminal: false
+      llm_prompt: |
+        Immediate, practical results or outcomes from using a product attribute.
+        Examples: 'keeps drinks cold for 6 hours', 'charges in 30 minutes', 'fits in car cupholder', 'reduces energy bill'
+        Focus: WHAT the product does or enables (functional performance).
+        NOT: how it makes you feel or broader life impacts - stick to direct, measurable outcomes.
+      examples:
+        - "keeps drinks cold for 6 hours"
+        - "charges in 30 minutes"
+        - "fits in car cupholder"
+
+    psychosocial_consequence:
+      name: "psychosocial_consequence"
+      description: "Personal/social meanings and feelings"
+      is_terminal: false
+      llm_prompt: |
+        Personal feelings, self-perceptions, or social meanings derived from product use.
+        Examples: 'feel more organized', 'appears professional', 'reduces anxiety', 'feel trendy', 'gain respect from peers'
+        Focus: psychological states, emotions, social identity, or how others perceive you.
+        NOT: end-state values or functional outcomes - this is about intermediate feelings/meanings.
+      examples:
+        - "feel more organized"
+        - "appears professional"
+        - "reduces anxiety"
+
+    value:
+      name: "value"
+      description: "End goals and core values"
+      is_terminal: true
+      llm_prompt: |
+        Fundamental life goals, deeply held principles, or end-state aspirations.
+        Examples: 'security', 'family harmony', 'self-actualization', 'environmental responsibility', 'personal freedom', 'social belonging'
+        Focus: ultimate WHY - core human values that transcend specific products.
+        Must be abstract and universally meaningful - not product-specific outcomes.
+      examples:
+        - "security"
+        - "family harmony"
+        - "self-actualization"
+        - "personal freedom"
+
+  edge_types:
+    - name: "leads_to"
+      description: "A causes or enables B vertically"
+      valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
+      valid_targets: ["functional_consequence", "psychosocial_consequence", "value"]
+      llm_prompt: |
+        Direct causal relationship moving UP the means-end chain (from concrete to abstract).
+        Use when: A directly causes, results in, or enables B at the next level.
+        Examples:
+        - 'smooth texture' → 'comfortable to hold' (attribute → functional)
+        - 'charges quickly' → 'reduces waiting anxiety' (functional → psychosocial)
+        - 'feel confident' → 'self-actualization' (psychosocial → value)
+        Must connect adjacent levels in hierarchy. NOT for lateral relationships.
+
+    - name: "requires"
+      description: "B cannot exist without A (prerequisite)"
+      valid_sources: ["attribute", "functional_consequence"]
+      valid_targets: ["functional_consequence", "psychosocial_consequence"]
+      llm_prompt: |
+        Hard dependency where B is impossible without A (stronger than enables).
+        Examples:
+        - 'has battery' → requires → 'wireless operation'
+        - 'waterproof seal' → requires → 'use in rain'
+        Use sparingly - only for true prerequisites, not just helpful factors.
+
+    - name: "conflicts_with"
+      description: "A and B are mutually incompatible"
+      valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence"]
+      valid_targets: ["attribute", "functional_consequence", "psychosocial_consequence"]
+      llm_prompt: |
+        Inherent incompatibility or trade-off where BOTH CANNOT BE TRUE simultaneously.
+
+        CORRECT usage (mutual exclusivity):
+        - 'large capacity' ↔ 'portable' (can't maximize both)
+        - 'premium materials' ↔ 'affordable' (can't have both)
+        - 'feel exclusive' ↔ 'feel accessible' (contradictory feelings)
+
+        INCORRECT usage (these are NOT conflicts):
+        - "X doesn't work, so I need Y" → This is leads_to, NOT conflicts_with
+          The inadequacy of X leads to needing Y. X and Y can both be true.
+        - "Water doesn't smooth coffee, so I need something else"
+          → water_doesnt_smooth -leads_to-> need_something_that_smooths
+
+        Test: Can A and B both be true at the same time? If yes, it's NOT a conflict.
+
+    - name: "relates_to"
+      description: "A has some stated relationship to B (catch-all for ambiguous relationships)"
+      valid_sources: ["attribute", "functional_consequence", "psychosocial_consequence", "value"]
+      valid_targets: ["attribute", "functional_consequence", "psychosocial_consequence", "value"]
+      llm_prompt: |
+        Any relationship that doesn't fit leads_to/requires/conflicts_with but respondent clearly links A and B.
+        Always preserve exact quote. Examples:
+        - Comparisons: "I prefer instant coffee [to premium]"
+        - Associations: "reminds me of X"
+        - Tensions: "expensive but probably worth it"
+        - Conditionals: "only if I have time"
+        Use this when relationship is stated but mechanism unclear.
+
+  extraction_guidance: |
+    When classifying nodes, consider the level of abstraction:
+    - Attributes are observable product features
+    - Functional consequences are practical "what it does"
+    - Psychosocial consequences involve self-perception or social dynamics
+    - Values are abstract end-states people pursue across life domains
+
+    When uncertain between adjacent levels, prefer the more concrete classification.
+
+    The goal is to build a ladder from concrete (attributes) to abstract (values),
+    revealing the personal meaning structure behind product perceptions.
+
+    EDGE TYPE SELECTION - CRITICAL:
+    - "X doesn't work, so I need Y" = CAUSAL CHAIN (leads_to), not conflict
+    - conflicts_with ONLY when A and B cannot both be true/achieved
+    - When in doubt between leads_to and conflicts_with, use leads_to
+
+# Metadata
+author: "Interview Agent Team"
+created_date: "2025-01-01"
+updated_date: "2025-01-01"

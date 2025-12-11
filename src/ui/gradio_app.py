@@ -1,27 +1,27 @@
 """
-Gradio interface for the AI Interview System v2.
+Gradio interface for the AI Interview System (NEW architecture).
 
 Provides a web-based chat interface for conducting interviews with graph-driven question generation.
-Compatible with HuggingFace Spaces deployment.
+Uses the new InterviewController architecture with simplified state management.
 """
 
 import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
 
 import gradio as gr
 from dotenv import load_dotenv
 
-# Import v2 components
-from src.core.models import GraphState, InterviewState, Node, Edge
-from src.interview.core import ConfigurableGraphDrivenOrchestrator
-from src.interview.tactics import SchemaDrivenTacticLoader, ConfigurableQuestionGenerator
-
-from src.llm.factory import LLMClientFactory, create_default_clients
-from src.llm.dual_llm_manager import DualLLMManager
-from src.config.llm_config_loader import LLMConfigLoader
+# Import NEW system components
+from controller import InterviewController
+from utils.llm_manager import LLMManager
+from utils.concept_parser import ConceptParser, ParsedConcept
+from utils.logger import InterviewLogger
+from core.graph import Graph
+from core.state import GraphState, CoverageState
 
 # Load environment variables
 load_dotenv()
@@ -32,350 +32,260 @@ logger = logging.getLogger(__name__)
 
 
 class InterviewUI:
-    """Gradio-based user interface for AI interviews with LLM integration."""
+    """Gradio-based user interface for AI interviews using NEW architecture."""
 
     def __init__(self):
         """Initialize the interview UI."""
-        self.current_orchestrator = None
-        self.current_session_id = None
-        self.llm_client = None
-        self.tactics = []
-        self.current_graph_state = GraphState()  # Persistent graph state
-        self.extraction_orchestrator = None  # Concept extraction orchestrator
-        self.dual_llm_manager = None  # Dual LLM manager for proper configuration
-        logger.info("InterviewUI v2 initialized")
+        self.current_controller: Optional[InterviewController] = None
+        self.current_session_id: Optional[str] = None
+        self.llm_manager: Optional[LLMManager] = None
+        self.concept_parser: Optional[ConceptParser] = None
+        
+        # Config paths (using src/config structure)
+        self.config_dir = Path(__file__).parent.parent / "config"
+        self.schema_path = self.config_dir / "schemas" / "means_end_chain.yaml"
+        self.logic_path = self.config_dir / "interview_logic.yaml"
+        self.llm_config_path = self.config_dir / "llm_config.yaml"
+        self.concepts_dir = self.config_dir / "concepts"
+        
+        logger.info("InterviewUI initialized with NEW architecture")
 
-    async def setup_llm_client(self):
-        """Set up LLM client and extraction components using proper YAML configuration.
-
-        Raises:
-            RuntimeError: If no API keys are configured (no LLM clients available)
-        """
+    def setup_llm_manager(self) -> bool:
+        """Set up LLM manager using new configuration system."""
         try:
-            # Use DualLLMManager with proper YAML configuration
-            logger.info("Setting up LLM clients using DualLLMManager with YAML configuration")
+            logger.info("Setting up LLM manager with new configuration")
             
-            # Create config loader and DualLLMManager
-            llm_config_loader = LLMConfigLoader("configs/llm_config.yaml")
-            self.dual_llm_manager = DualLLMManager(llm_config_loader)
+            # Check if config files exist
+            if not self.llm_config_path.exists():
+                raise FileNotFoundError(f"LLM config not found: {self.llm_config_path}")
             
-            # Initialize the manager
-            success = await self.dual_llm_manager.initialize()
+            if not self.logic_path.exists():
+                raise FileNotFoundError(f"Interview logic not found: {self.logic_path}")
+                
+            if not self.schema_path.exists():
+                raise FileNotFoundError(f"Schema not found: {self.schema_path}")
             
-            if not success:
-                logger.error("Failed to initialize DualLLMManager")
-                raise RuntimeError("Dual LLM initialization failed")
+            # Initialize LLM manager
+            self.llm_manager = LLMManager.from_config_file(str(self.llm_config_path))
             
-            # Get the graph extraction client (for concept extraction)
-            graph_client = self.dual_llm_manager._graph_extraction_client
+            # Check available providers
+            available_providers = self.llm_manager.list_available_providers()
+            if not available_providers:
+                logger.warning("No LLM providers available - check API keys in .env")
+                return False
             
-            if not graph_client:
-                logger.error("No graph extraction client available")
-                raise RuntimeError("No graph extraction client available")
+            logger.info(f"Available LLM providers: {available_providers}")
             
-            # Use the graph extraction client for the system
-            self.llm_client = graph_client
+            # Initialize concept parser
+            self.concept_parser = ConceptParser(self.llm_manager)
             
-            logger.info(f"Using graph extraction client: {type(graph_client).__name__}")
-
-            # Initialize extraction components with properly configured client
-            self._setup_extraction_components(graph_client)
             return True
+            
+        except Exception as e:
+            logger.error(f"Failed to setup LLM manager: {e}")
+            return False
 
-        except RuntimeError:
-            # Re-raise API key errors
-            raise
-        except Exception as e:
-            logger.error(f"Could not create LLM client with DualLLMManager: {e}")
-            
-            # Fallback to old method if DualLLMManager fails
-            logger.warning("Falling back to create_default_clients() method")
-            try:
-                clients = create_default_clients()
-                if clients:
-                    provider, client = next(iter(clients.items()))
-                    self.llm_client = client
-                    logger.info(f"Using fallback LLM client: {provider}")
-                    self._setup_extraction_components(client)
-                    return True
-                else:
-                    raise RuntimeError("No LLM clients available from fallback method")
-            except Exception as fallback_error:
-                logger.error(f"Fallback method also failed: {fallback_error}")
-                raise RuntimeError(f"Application initialization failed: {e}")
-    
-    def _setup_extraction_components(self, llm_client):
-        """Set up concept extraction components."""
+    def get_available_concepts(self) -> List[str]:
+        """Get list of available concept files."""
         try:
-            from src.interview.extraction import ExtractionPromptBuilder, ExtractionValidator, ResponseProcessor, ConceptExtractor, GraphExtractionOrchestrator
+            if not self.concepts_dir.exists():
+                return []
             
-            # Create extraction components
-            schema_path = "schemas/means_end_chain_v0.2.yaml"
-            prompt_builder = ExtractionPromptBuilder(schema_path)
-            validator = ExtractionValidator(schema_path)
-            response_processor = ResponseProcessor(llm_client, prompt_builder, validator)
-            concept_extractor = ConceptExtractor(llm_client, prompt_builder, validator)
+            concept_files = []
+            for file_path in self.concepts_dir.glob("*.md"):
+                concept_files.append(file_path.name)
             
-            # Create extraction orchestrator
-            self.extraction_orchestrator = GraphExtractionOrchestrator(
-                response_processor=response_processor,
-                concept_extractor=concept_extractor
-            )
-            
-            logger.info("Concept extraction components initialized successfully")
-            
+            return sorted(concept_files)
         except Exception as e:
-            logger.warning(f"Could not initialize extraction components: {e}")
-            self.extraction_orchestrator = None
-    
-    def _create_extraction_orchestrator_for_interview(self) -> Optional['GraphExtractionOrchestrator']:
-        """
-        Factory method to create a new extraction orchestrator instance for each interview.
-        
-        This prevents shared state issues by ensuring each interview gets its own
-        extraction orchestrator instance, while still using the same configuration
-        and components as the main UI instance.
-        
-        Returns:
-            New GraphExtractionOrchestrator instance or None if not configured
-        """
-        if not self.extraction_orchestrator:
-            return None
-        
+            logger.error(f"Error listing concepts: {e}")
+            return []
+
+    def parse_concept_text(self, concept_text: str, concept_name: str = "User Concept") -> ParsedConcept:
+        """Parse concept text using LLM or fallback to simple parsing."""
         try:
-            from src.interview.extraction import GraphExtractionOrchestrator
-            
-            # Create a new instance with the same configuration as the main instance
-            # This ensures isolation between interviews while reusing the same setup
-            return GraphExtractionOrchestrator(
-                response_processor=self.extraction_orchestrator.response_processor,
-                concept_extractor=self.extraction_orchestrator.concept_extractor
-            )
+            if self.concept_parser:
+                # Try LLM-based parsing
+                return self.concept_parser.parse_text(concept_text, concept_name)
+            else:
+                # Fallback to simple concept
+                from utils.concept_parser import ParsedConcept, ConceptElements
+                elements = ConceptElements(
+                    insight="",
+                    promise=concept_text[:200] if len(concept_text) > 200 else concept_text,
+                    rtb=""
+                )
+                return ParsedConcept(
+                    name=concept_name,
+                    description=concept_text,
+                    elements=elements
+                )
         except Exception as e:
-            logger.warning(f"Could not create extraction orchestrator for interview: {e}")
-            return None
+            logger.error(f"Concept parsing failed: {e}")
+            # Ultimate fallback
+            from utils.concept_parser import ParsedConcept, ConceptElements
+            return ParsedConcept(
+                name=concept_name,
+                description=concept_text,
+                elements=ConceptElements()
+            )
 
     async def start_interview_with_concept(
-        self, concept_description: str
-    ) -> tuple[list, dict, str, list, list, str, dict]:
-        """Start new interview with concept description."""
-        if not concept_description or not concept_description.strip():
-            error_msg = [
-                {"role": "assistant", "content": "Please provide a concept description first."}
-            ]
+        self, concept_text: str, selected_concept_file: Optional[str] = None
+    ) -> Tuple[List[Dict], Dict, str, str, List[List], List[List], Dict]:
+        """Start new interview with concept description or file."""
+        if not concept_text.strip() and not selected_concept_file:
+            error_msg = [{"role": "assistant", "content": "Please provide a concept description or select a concept file."}]
             return (
                 error_msg,
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0},
+                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "status": "error"},
                 "Error: No concept",
+                "No concept provided",
                 [],
                 [],
-                "No changes yet",
-                {"total_tokens": 0, "llm_provider": "none", "questions_generated": 0},
+                {"error": "No concept provided"}
             )
 
         try:
-            # Set up LLM client
-            has_llm = await self.setup_llm_client()
+            # Setup LLM manager if not already done
+            has_llm = self.setup_llm_manager()
             
-            # Load tactics
-            tactic_loader = SchemaDrivenTacticLoader()
-            self.tactics = tactic_loader.load_tactics()
+            # Determine concept source
+            if selected_concept_file and selected_concept_file != "None":
+                # Load from file
+                concept_path = self.concepts_dir / selected_concept_file
+                if not concept_path.exists():
+                    raise FileNotFoundError(f"Concept file not found: {concept_path}")
+                
+                controller = InterviewController.from_concept_file(
+                    concept_path=str(concept_path),
+                    schema_path=str(self.schema_path),
+                    logic_path=str(self.logic_path),
+                    llm_config_path=str(self.llm_config_path),
+                    max_turns=20
+                )
+                concept_name = controller.config.concept_name
+                concept_description = controller.config.concept_text
+            else:
+                # Parse provided text
+                concept = self.parse_concept_text(concept_text, "User Concept")
+                element_config = concept.get_element_config()
+                
+                controller = InterviewController.initialize(
+                    concept_text=concept.description,
+                    schema_path=str(self.schema_path),
+                    logic_path=str(self.logic_path),
+                    llm_config_path=str(self.llm_config_path),
+                    element_config=element_config,
+                    concept_name=concept.name,
+                    max_turns=20
+                )
+                concept_name = concept.name
+                concept_description = concept.description
             
-            # Create orchestrator with extraction support
-            extraction_orchestrator = self._create_extraction_orchestrator_for_interview()
-            
-            # Create configuration loader for configurable orchestrator
-            from src.config.interview_config_loader import InterviewConfigLoader
-            config_loader = InterviewConfigLoader()
-            
-            self.current_orchestrator = ConfigurableGraphDrivenOrchestrator(
-                extraction_orchestrator=extraction_orchestrator,
-                config_loader=config_loader
-            )
-            
-            # Create session
+            self.current_controller = controller
             self.current_session_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
-            # Create initial interview state and graph
-            interview_state = InterviewState(session_id=self.current_session_id)
-            self.current_graph_state = GraphState()  # Initialize persistent graph state
+            # Generate opening question
+            opening_question = controller.generate_opening()
             
-            # Use hardcoded warm-up question with concept included
-            first_question = f"Please read the concept and tell me your first impression: {concept_description}"
-            logger.info(f"Using hardcoded warm-up question: {first_question}")
-            
-            # Extract initial concepts for graph building (but don't use them for first question)
-            if extraction_orchestrator and self.llm_client:
-                try:
-                    # Extract seed concepts from concept description
-                    logger.info("Extracting initial concepts from concept description")
-                    initial_delta = await extraction_orchestrator.extract_initial_concepts(concept_description)
-                    
-                    if not initial_delta.is_empty():
-                        # Apply initial concepts to graph (function modifies graph in-place)
-                        extraction_orchestrator._apply_extraction_to_graph(
-                            delta=initial_delta,
-                            current_graph=self.current_graph_state,
-                            turn_number=0
-                        )
-                        logger.info(f"Applied {len(initial_delta.nodes_added)} initial seed concepts to graph")
-                    
-                except Exception as e:
-                    logger.error(f"Failed to extract initial concepts: {e}")
-                    # Continue without initial concept extraction - graph will be built during interview
-                    logger.info("Continuing without initial concept extraction - graph will be built during interview")
-            
-            # Set initial turn for first question
-            interview_state.turn_number = 0
-            self.interview_turn_tracker = 0
-
             # Build initial history
-            history = [{"role": "assistant", "content": first_question}]
+            history = [{"role": "assistant", "content": opening_question}]
             
             # Initial stats
             stats = {
-                "nodes": self.current_graph_state.get_node_count(),
-                "edges": self.current_graph_state.get_edge_count(),
-                "coverage": "0%",
+                "nodes": len(controller.graph.nodes),
+                "edges": len(controller.graph.edges),
+                "coverage": f"{len([e for e in controller.coverage_state.reference_elements if controller.coverage_state.element_node_mappings.get(e)])}/{len(controller.coverage_state.reference_elements)}",
                 "turns": 0,
-                "has_llm": has_llm,
-                "provider": self.llm_client.provider if self.llm_client else "template"
+                "status": "active",
+                "has_llm": has_llm
             }
             
-            # Token usage placeholder
-            token_usage = {
-                "total_tokens": 0,
-                "llm_provider": self.llm_client.provider if self.llm_client else "template",
-                "questions_generated": 1
-            }
-
-            logger.info(f"Interview started: {self.current_session_id}")
-            return history, stats, self.current_session_id, [], [], "Interview started", token_usage
+            # Get initial graph data for tables
+            nodes_data, edges_data = self._get_graph_table_data(controller.graph)
+            
+            logger.info(f"Interview started: {self.current_session_id} for concept: {concept_name}")
+            
+            return (
+                history,
+                stats,
+                self.current_session_id,
+                concept_description,
+                nodes_data,
+                edges_data,
+                {"status": "started", "concept": concept_name}
+            )
             
         except Exception as e:
             logger.error(f"Failed to start interview: {e}")
-            error_msg = [
-                {
-                    "role": "assistant",
-                    "content": f"Sorry, I encountered an error starting the interview: {str(e)}\n\nPlease check that your API keys are set correctly in .env",
-                }
-            ]
+            error_msg = [{"role": "assistant", "content": f"Sorry, I encountered an error starting the interview: {str(e)}\n\nPlease check that your configuration files are in place and API keys are set correctly in .env"}]
             return (
                 error_msg,
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0},
+                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "status": "error"},
                 "Error",
-                [],
-                [],
                 "Error occurred",
-                {"total_tokens": 0, "llm_provider": "none", "questions_generated": 0},
+                [],
+                [],
+                {"error": str(e)}
             )
 
     async def process_response(
-        self, user_response: str, history: list
-    ) -> tuple[list, str, dict, str, list, list, str, dict]:
-        """Process participant response and generate next question with concept extraction."""
-        if not self.current_orchestrator:
+        self, user_response: str, history: List[Dict]
+    ) -> Tuple[List[Dict], str, Dict, str, List[List], List[List], Dict]:
+        """Process participant response and generate next question."""
+        if not self.current_controller:
             return (
                 history,
                 "",
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0},
+                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "status": "error"},
                 "No active session",
                 [],
                 [],
-                "No active session",
-                {"total_tokens": 0, "llm_provider": "none", "questions_generated": 0},
+                {"error": "No active session"}
             )
 
-        if not user_response or not user_response.strip():
+        if not user_response.strip():
             return (
                 history,
                 "",
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0},
+                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "status": "error"},
                 self.current_session_id or "Not started",
                 [],
                 [],
-                "No response provided",
-                {"total_tokens": 0, "llm_provider": "none", "questions_generated": 0},
+                {"error": "No response provided"}
             )
 
         try:
-            # Create proper graph state (persist across turns)
-            if not hasattr(self, 'current_graph_state'):
-                self.current_graph_state = GraphState()
-                logger.info("Initialized new graph state for session")
+            # Process response and get next question
+            next_question = self.current_controller.process_response(user_response)
             
-            # Create interview state with proper turn tracking
-            interview_state = InterviewState(session_id=self.current_session_id)
-            # Set turn number based on actual interview progression, not chat history calculation
-            if hasattr(self, 'interview_turn_tracker'):
-                interview_state.turn_number = self.interview_turn_tracker
-            else:
-                # For existing sessions, estimate from history but track properly going forward
-                interview_state.turn_number = len([h for h in history if h["role"] == "assistant"])
-                self.interview_turn_tracker = interview_state.turn_number
-            
-            # Add previous questions to history
-            for msg in history:
-                interview_state.add_question(msg["content"])
-                if msg["role"] == "assistant":
-                    interview_state.record_tactic_usage("emotional_contrast")  # Simplified
-
-            # Get recent conversation history for extraction context
-            recent_history = history[-3:] if len(history) > 3 else history
-            
-            # Increment turn number for proper tracking (before generating next question)
-            interview_state.increment_turn()
-            self.interview_turn_tracker = interview_state.turn_number
-            
-            # Process response with concept extraction and generate next question
-            next_question = await self.current_orchestrator.process_response(
-                response_text=user_response,
-                conversation_history=recent_history,
-                graph_state=self.current_graph_state,
-                interview_state=interview_state
-            )
-
-            if not next_question:
-                next_question = "Can you tell me more about that?"
-
             # Update history
             history.append({"role": "user", "content": user_response})
             history.append({"role": "assistant", "content": next_question})
-
-            # Get current stats from actual graph
+            
+            # Update stats
             stats = {
-                "nodes": self.current_graph_state.get_node_count(),
-                "edges": self.current_graph_state.get_edge_count(),
-                "coverage": f"{min(100, self.current_graph_state.get_node_count() * 10)}%",
-                "turns": interview_state.turn_number,
-                "has_llm": self.llm_client is not None,
-                "provider": self.llm_client.provider if self.llm_client else "template"
+                "nodes": len(self.current_controller.graph.nodes),
+                "edges": len(self.current_controller.graph.edges),
+                "coverage": f"{len([e for e in self.current_controller.coverage_state.reference_elements if self.current_controller.coverage_state.element_node_mappings.get(e)])}/{len(self.current_controller.coverage_state.reference_elements)}",
+                "turns": self.current_controller.state.turn_count,
+                "status": "complete" if self.current_controller.state.is_complete else "active",
+                "completion_reason": self.current_controller.state.completion_reason
             }
-
-            # Token usage from actual tracking (no longer estimated)
-            token_usage = {
-                "total_tokens": interview_state.tokens_used,
-                "prompt_tokens": interview_state.prompt_tokens,
-                "completion_tokens": interview_state.completion_tokens,
-                "llm_provider": self.llm_client.provider if self.llm_client else "template",
-                "questions_generated": interview_state.turn_number + 1
-            }
-
-            # Create summary with extraction info
-            summary = f"🆕 **This turn:** Generated 1 new question"
-
-            # Get real visualization data
-            new_nodes_data, new_edges_data = self._get_visualization_data(self.current_graph_state)
-
+            
+            # Get updated graph data for tables
+            nodes_data, edges_data = self._get_graph_table_data(self.current_controller.graph)
+            
+            logger.info(f"Processed turn {self.current_controller.state.turn_count}")
+            
             return (
                 history,
                 "",
                 stats,
                 self.current_session_id or "Active",
-                new_nodes_data,
-                new_edges_data,
-                summary,
-                token_usage,
+                nodes_data,
+                edges_data,
+                {"status": "processed", "turn": self.current_controller.state.turn_count}
             )
             
         except Exception as e:
@@ -387,131 +297,107 @@ class InterviewUI:
             return (
                 history,
                 "",
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0},
+                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "status": "error"},
                 self.current_session_id or "Error",
                 [],
                 [],
-                "Error occurred",
-                {"total_tokens": 0, "llm_provider": "none", "questions_generated": 0},
+                {"error": str(e)}
             )
 
-    def _get_visualization_data(self, graph_state):
-        """Get real visualization data from graph state."""
-        if not graph_state:
+    def _get_graph_table_data(self, graph: Graph) -> Tuple[List[List], List[List]]:
+        """Get graph data for display tables."""
+        if not graph:
             return [], []
         
-        # Build nodes data
+        # Nodes data: [ID, Type, Label, Timestamp, Ambiguous]
         nodes_data = []
-        for node_id, node in graph_state.nodes.items():
+        for node in graph.nodes.values():
             nodes_data.append([
-                node.type,
+                node.id[:8] + "..." if len(node.id) > 8 else node.id,
+                node.node_type or "unknown",
                 node.label,
-                node.source_quotes[0] if node.source_quotes else "",
-                str(node.creation_turn),
-                str(node.visit_count)
+                node.timestamp.strftime("%H:%M:%S"),
+                "Yes" if node.is_ambiguous else "No"
             ])
         
-        # Build edges data
+        # Sort by timestamp (newest first)
+        nodes_data.sort(key=lambda x: x[3], reverse=True)
+        
+        # Edges data: [ID, Type, Source, Target, Relation]
         edges_data = []
-        for edge_id, edge in graph_state.edges.items():
+        for edge in graph.edges.values():
+            source_node = graph.get_node(edge.source_id)
+            target_node = graph.get_node(edge.target_id)
+            source_label = source_node.label if source_node else edge.source_id[:8]
+            target_label = target_node.label if target_node else edge.target_id[:8]
+            
             edges_data.append([
-                edge.type,
-                f"{edge.source} → {edge.target}",
-                edge.source_quote,
-                f"{edge.confidence:.2f}"
+                edge.id[:8] + "..." if len(edge.id) > 8 else edge.id,
+                edge.relation_type,
+                source_label,
+                target_label,
+                f"{source_label} → {target_label}"
             ])
         
         return nodes_data, edges_data
-    
-    def refresh_visualization(self):
-        """Refresh graph visualization and tables."""
-        # For v2, we'll create a simple placeholder
-        import plotly.graph_objects as go
 
-        fig = go.Figure()
-        fig.add_annotation(
-            text="Graph visualization not implemented in v2 demo", 
-            showarrow=False, 
-            font={"size": 16}
-        )
-        
-        # Simple placeholder data
-        nodes_data = [
-            ["concept", "Example Concept", "Sample quote", "1", "1"]
-        ]
-        edges_data = [
-            ["relates_to", "concept1 → concept2", "Sample quote", "1"]
-        ]
-
-        return fig, nodes_data, edges_data
-
-    async def export_graphml_file(self):
-        """Export GraphML file for download."""
+    async def export_json_file(self) -> Optional[str]:
+        """Export complete session data as JSON."""
         try:
-            if not self.current_session_id:
-                logger.warning("Export attempted with no active session")
-                return None
-
-            logger.info(f"Exporting GraphML for session {self.current_session_id}")
-
-            import tempfile
-            
-            # Create simple GraphML content for demo
-            graphml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
-  <graph id="{self.current_session_id}" edgedefault="directed">
-    <node id="example" />
-    <edge source="example" target="demo" />
-  </graph>
-</graphml>"""
-
-            # Write to temp file
-            temp_file = tempfile.NamedTemporaryFile(
-                mode="wb",
-                suffix=".graphml",
-                delete=False,
-                prefix=f"interview_{self.current_session_id}_",
-            )
-            temp_file.write(graphml_content.encode())
-            temp_file.close()
-
-            logger.info(f"GraphML export successful: {temp_file.name}")
-            return temp_file.name
-
-        except Exception as e:
-            logger.error(f"GraphML export failed: {e}")
-            return None
-
-    async def export_json_file(self):
-        """Export JSON file for download."""
-        try:
-            if not self.current_session_id:
+            if not self.current_controller or not self.current_session_id:
                 logger.warning("JSON export attempted with no active session")
                 return None
 
             logger.info(f"Exporting JSON for session {self.current_session_id}")
-
+            
             import json
             import tempfile
-
-            # Create simple JSON data for demo
-            json_data = {
-                "session_id": self.current_session_id,
-                "timestamp": datetime.now().isoformat(),
-                "graph": {
-                    "nodes": [{"id": "example", "label": "Example Node", "type": "concept"}],
-                    "edges": [{"source": "example", "target": "demo", "type": "relates_to"}]
+            
+            # Get complete session data with proper serialization
+            try:
+                session_data = self.current_controller.export_session()
+                
+                # Ensure all data is JSON serializable by converting Pydantic models
+                export_data = {
+                    "session_id": self.current_session_id,
+                    "export_timestamp": datetime.now().isoformat(),
+                    "system_version": "NEW_architecture_v1",
+                    "metadata": {
+                        "concept_name": self.current_controller.config.concept_name,
+                        "turns_completed": self.current_controller.state.turn_count,
+                        "is_complete": self.current_controller.state.is_complete,
+                        "completion_reason": self.current_controller.state.completion_reason,
+                        "graph_nodes": len(self.current_controller.graph.nodes),
+                        "graph_edges": len(self.current_controller.graph.edges),
+                        "coverage_satisfied": self.current_controller.coverage_state.is_satisfied(),
+                        "coverage_gaps": len(self.current_controller.coverage_state.get_gaps())
+                    },
+                    "interview_summary": self.current_controller.get_interview_summary()
                 }
-            }
-
+                
+                # Test JSON serialization
+                json.dumps(export_data, default=str)  # Use default=str for any remaining issues
+                
+            except Exception as serialize_error:
+                logger.warning(f"Full session export failed, falling back to summary: {serialize_error}")
+                # Fallback to just summary data
+                export_data = {
+                    "session_id": self.current_session_id,
+                    "export_timestamp": datetime.now().isoformat(),
+                    "system_version": "NEW_architecture_v1",
+                    "note": "Full export failed, providing summary only",
+                    "interview_summary": self.current_controller.get_interview_summary(),
+                    "transcript": self.current_controller.get_transcript()
+                }
+            
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 suffix=".json",
                 delete=False,
                 prefix=f"interview_{self.current_session_id}_",
             ) as temp_file:
-                json.dump(json_data, temp_file, indent=2)
-
+                json.dump(export_data, temp_file, indent=2, default=str)
+            
             logger.info(f"JSON export successful: {temp_file.name}")
             return temp_file.name
 
@@ -519,35 +405,45 @@ class InterviewUI:
             logger.error(f"JSON export failed: {e}")
             return None
 
-    async def export_transcript_file(self):
-        """Export transcript file for download."""
+    async def export_transcript_file(self) -> Optional[str]:
+        """Export interview transcript as text file."""
         try:
-            if not self.current_session_id:
+            if not self.current_controller or not self.current_session_id:
                 logger.warning("Transcript export attempted with no active session")
                 return None
 
             logger.info(f"Exporting transcript for session {self.current_session_id}")
-
+            
             import tempfile
-
-            # Create simple transcript for demo
-            transcript_text = f"""Interview Session: {self.current_session_id}
+            
+            # Get transcript from controller
+            transcript = self.current_controller.get_transcript()
+            
+            # Add header with session info
+            full_transcript = f"""Interview Session: {self.current_session_id}
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Concept: {self.current_controller.config.concept_name}
+Turns: {self.current_controller.state.turn_count}
+Status: {'Complete' if self.current_controller.state.is_complete else 'Incomplete'}
 
-[AI] Tell me about your experience with this concept.
-[User] This is a sample response.
-[AI] Can you tell me more about that?
+{transcript}
+
+--- Session Summary ---
+Total Nodes: {len(self.current_controller.graph.nodes)}
+Total Edges: {len(self.current_controller.graph.edges)}
+Coverage Satisfied: {self.current_controller.coverage_state.is_satisfied()}
+Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
 """
-
+            
             temp_file = tempfile.NamedTemporaryFile(
                 mode="w",
                 suffix=".txt",
                 delete=False,
                 prefix=f"transcript_{self.current_session_id}_",
             )
-            temp_file.write(transcript_text)
+            temp_file.write(full_transcript)
             temp_file.close()
-
+            
             logger.info(f"Transcript export successful: {temp_file.name}")
             return temp_file.name
 
@@ -555,80 +451,48 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             logger.error(f"Transcript export failed: {e}")
             return None
 
-    async def export_extended_report_file(self):
-        """Export extended report file for download."""
-        try:
-            if not self.current_session_id:
-                logger.warning("Extended report export attempted with no active session")
-                return None
-
-            logger.info(f"Exporting extended report for session {self.current_session_id}")
-
-            import tempfile
-
-            # Create simple report for demo
-            report_markdown = f"""# Interview Report
-
-**Session ID:** {self.current_session_id}  
-**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-
-## Summary
-- Total turns: Sample
-- Graph nodes: Sample
-- Graph edges: Sample
-- LLM provider: {self.llm_client.provider if self.llm_client else 'template'}
-
-## Interview Transcript
-See transcript file for detailed conversation.
-
-## Graph Analysis
-See JSON/GraphML files for detailed graph data.
-"""
-
-            temp_file = tempfile.NamedTemporaryFile(
-                mode="w",
-                suffix=".md",
-                delete=False,
-                prefix=f"extended_report_{self.current_session_id}_",
-            )
-            temp_file.write(report_markdown)
-            temp_file.close()
-
-            logger.info(f"Extended report export successful: {temp_file.name}")
-            return temp_file.name
-
-        except Exception as e:
-            logger.error(f"Extended report export failed: {e}")
-            return None
-
     def _build_header(self):
         """Build header section."""
         gr.Markdown(
             """
-            # 🎙️ AI Interview Assistant v2
-            **Graph-driven adaptive interviewing with LLM-powered question generation**
-
-            This system uses AI to conduct natural, conversational interviews
-            while building a knowledge graph of your mental model.
+            # 🎙️ Automonous Graph-driven AI Interviewer
             """
         )
 
-    def _build_concept_input_section(self) -> tuple:
-        """Build concept input section. Returns (concept_input, start_btn)."""
+    def _build_concept_input_section(self) -> Tuple:
+        """Build concept input section."""
         with gr.Row():
-            with gr.Column():
+            with gr.Column(scale=2):
                 gr.Markdown("### Step 1: Describe the Concept")
                 concept_input = gr.Textbox(
                     label="Concept Description",
                     placeholder="E.g., 'A sustainable coffee maker that uses biodegradable pods and has a built-in grinder'",
-                    lines=3,
+                    lines=2,
                     value="A premium coffee subscription service that delivers freshly roasted beans from local roasters every month.",
                 )
-                start_btn = gr.Button("Start Interview", variant="primary", size="lg")
+            
+            with gr.Column(scale=1):
+                gr.Markdown("### Or Load from File")
+                available_concepts = self.get_available_concepts()
+                concept_file_dropdown = gr.Dropdown(
+                    choices=["None"] + available_concepts,
+                    label="Select Concept File",
+                    value="None",
+                    info="Choose a concept file or use text input above"
+                )
+        
+        with gr.Row():
+            start_btn = gr.Button("Start Interview", variant="primary", size="lg")
+            status_text = gr.Textbox(
+                label="Status",
+                value="Ready to start",
+                interactive=False,
+                max_lines=1
+            )
 
-        return concept_input, start_btn
+        return concept_input, concept_file_dropdown, start_btn, status_text
 
-    def _build_interview_tab(self) -> tuple:
+    def _build_interview_tab(self) -> Tuple:
         """Build interview chat tab."""
         with gr.TabItem("💬 Interview"):
             with gr.Row():
@@ -636,7 +500,7 @@ See JSON/GraphML files for detailed graph data.
                 with gr.Column(scale=2):
                     chatbot = gr.Chatbot(
                         label="Interview Conversation",
-                        height=500,
+                        height=400,
                     )
 
                     with gr.Row():
@@ -669,54 +533,27 @@ See JSON/GraphML files for detailed graph data.
                         value={
                             "nodes": 0,
                             "edges": 0,
-                            "coverage": "0%",
+                            "coverage": "0/0",
                             "turns": 0,
-                            "has_llm": False,
-                            "provider": "none"
+                            "status": "ready",
+                            "completion_reason": None
                         },
                     )
 
-                    # LLM Usage Display
-                    gr.Markdown("### LLM Usage")
-                    token_usage_display = gr.JSON(
-                        label="LLM Token Consumption",
-                        value={
-                            "total_tokens": 0,
-                            "llm_provider": "none",
-                            "questions_generated": 0
-                        }
+                    # Concept display
+                    concept_display = gr.Textbox(
+                        label="Current Concept",
+                        value="No concept loaded",
+                        interactive=False,
+                        lines=2
                     )
-
-                    # Dynamic delta display
-                    with gr.Accordion("Latest Graph Changes", open=True):
-                        delta_summary = gr.Markdown("No changes yet")
-
-                        gr.Markdown("### Newly Added Nodes")
-                        new_nodes_display = gr.Dataframe(
-                            headers=["Type", "Label", "Source Quote", "Turn"],
-                            value=[],
-                            label="Nodes Added This Turn",
-                            interactive=False,
-                            wrap=True,
-                            column_widths=["15%", "25%", "45%", "15%"],
-                        )
-
-                        gr.Markdown("### Newly Added Relationships")
-                        new_edges_display = gr.Dataframe(
-                            headers=["Type", "Relationship", "Source Quote", "Turn"],
-                            value=[],
-                            label="Edges Added This Turn",
-                            interactive=False,
-                            wrap=True,
-                            column_widths=["20%", "25%", "40%", "15%"],
-                        )
 
             # Instructions
             with gr.Accordion("ℹ️ How to use", open=False):
                 gr.Markdown(
                     """
                     **Instructions:**
-                    1. Describe the product/concept you want to explore in the text box above
+                    1. Describe a product/concept in the text box above, or select a concept file
                     2. Click **Start Interview** to begin
                     3. Read the AI interviewer's question
                     4. Type your response and click **Submit**
@@ -729,96 +566,73 @@ See JSON/GraphML files for detailed graph data.
                     - The AI adapts its questions based on your responses
                     - Watch the Knowledge Graph stats update in real-time!
 
-                    **LLM Integration:**
-                    - Set ANTHROPIC_API_KEY or OPENAI_API_KEY for natural questions
-                    - Without API keys, uses template-based questions
+                    **Setup Requirements:**
+                    - Configuration files must be in src/config/
+                    - Set API keys in .env file (ANTHROPIC_API_KEY, etc.)
+                    - Without API keys, system will show clear error messages
                     """
                 )
 
         return (chatbot, user_input, submit_btn, clear_btn,
-                session_id_display, graph_stats, delta_summary,
-                new_nodes_display, new_edges_display, token_usage_display)
+                session_id_display, graph_stats, concept_display)
 
-    def _build_visualization_tab(self) -> tuple:
-        """Build graph visualization tab."""
-        with gr.TabItem("📊 Graph Visualization"):
-            gr.Markdown("### Interactive Knowledge Graph")
-
-            # Interpretation guide
-            with gr.Accordion("ℹ️ How to Interpret the Graph", open=False):
-                gr.Markdown(
-                    """
-                    **Node Colors** (by type):
-                    - 🔵 Blue = Attributes (product features mentioned)
-                    - 🟢 Green = Functional Consequences (what the product does/enables)
-                    - 🟣 Purple = Psychosocial Consequences (how it makes you feel)
-                    - 🔴 Red = Terminal Values (end goals, life values)
-                    - 🟠 Orange = Instrumental Values
-
-                    **Node Size:**
-                    - Larger nodes = more visits during interview
-
-                    **LLM Integration:**
-                    - Questions are generated by AI (Claude/GPT/Kimi)
-                    - More natural and context-aware than templates
-                    - Adapts to your responses and graph structure
-                    """
+    def _build_graph_tab(self) -> Tuple:
+        """Build graph visualization tab with node/edge tables."""
+        with gr.TabItem("📊 Knowledge Graph"):
+            gr.Markdown("### Current Knowledge Graph")
+            
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("**Nodes** (Concepts mentioned)")
+                    nodes_table = gr.Dataframe(
+                        headers=["ID", "Type", "Label", "Created", "Ambiguous"],
+                        label="Graph Nodes",
+                        interactive=False,
+                        wrap=True,
+                        column_widths=["15%", "15%", "40%", "15%", "15%"],
+                    )
+                
+                with gr.Column():
+                    gr.Markdown("**Edges** (Relationships between concepts)")
+                    edges_table = gr.Dataframe(
+                        headers=["ID", "Type", "Source", "Target", "Relationship"],
+                        label="Graph Edges",
+                        interactive=False,
+                        wrap=True,
+                        column_widths=["15%", "20%", "25%", "25%", "15%"],
+                    )
+            
+            with gr.Row():
+                refresh_btn = gr.Button("🔄 Refresh Graph Data", size="sm")
+                graph_summary = gr.Textbox(
+                    label="Graph Summary",
+                    value="No graph data yet",
+                    interactive=False,
+                    lines=3
                 )
 
-            graph_plot = gr.Plot(label="Graph Structure")
+        return nodes_table, edges_table, refresh_btn, graph_summary
 
-            with gr.Row():
-                refresh_viz_btn = gr.Button("🔄 Refresh Visualization", size="sm")
-
-            gr.Markdown("### Graph Data Tables")
-
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("**Nodes**")
-                    nodes_table = gr.Dataframe(
-                        headers=["ID", "Type", "Label", "Quotes", "Visit Count", "Turn"],
-                        interactive=False,
-                    )
-
-                with gr.Column():
-                    gr.Markdown("**Edges**")
-                    edges_table = gr.Dataframe(
-                        headers=["ID", "Type", "Source", "Target", "Quote", "Turn"],
-                        interactive=False,
-                    )
-
-        return graph_plot, refresh_viz_btn, nodes_table, edges_table
-
-    def _build_export_tab(self) -> tuple:
+    def _build_export_tab(self) -> Tuple:
         """Build export tab."""
         with gr.TabItem("💾 Export"):
             gr.Markdown(
                 """
                 ### Export Interview Results
-                Download graph data and conversation transcript in various formats.
+                Download session data and conversation transcript.
                 """
             )
 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("**Graph Formats**")
-                    export_graphml_btn = gr.Button(
-                        "📥 Download GraphML",
-                        variant="secondary",
-                        size="lg",
-                    )
-                    graphml_file = gr.File(
-                        label="GraphML File (for Gephi, yEd, Cytoscape)",
-                        visible=True,
-                    )
-
+                    gr.Markdown("**Session Data**")
                     export_json_btn = gr.Button(
-                        "📥 Download JSON",
-                        variant="secondary",
+                        "📥 Download JSON (Complete Session)",
+                        variant="primary",
                         size="lg",
                     )
                     json_file = gr.File(
-                        label="JSON File (raw graph data)",
+                        label="JSON File (complete session data)",
                         visible=True,
                     )
 
@@ -834,56 +648,48 @@ See JSON/GraphML files for detailed graph data.
                         visible=True,
                     )
 
-                    export_extended_report_btn = gr.Button(
-                        "📥 Download Extended Report (Markdown)",
-                        variant="primary",
-                        size="lg",
-                    )
-                    extended_report_file = gr.File(
-                        label="Extended Report (Markdown with turn-by-turn breakdown)",
-                        visible=True,
-                    )
+            with gr.Accordion("ℹ️ Export Information", open=False):
+                gr.Markdown(
+                    """
+                    **JSON Export:** Complete session data including:
+                    - Interview configuration and summary
+                    - Full knowledge graph (nodes & edges)
+                    - Complete conversation history
+                    - Coverage tracking data
+                    - Schema validation results
 
-        export_buttons = {
-            'export_graphml_btn': export_graphml_btn,
-            'export_json_btn': export_json_btn,
-            'export_transcript_btn': export_transcript_btn,
-            'export_extended_report_btn': export_extended_report_btn,
-        }
+                    **Transcript Export:** Clean text format with:
+                    - Session metadata (ID, date, concept)
+                    - Full conversation history
+                    - Session summary statistics
+                    """
+                )
 
-        export_files = {
-            'graphml_file': graphml_file,
-            'json_file': json_file,
-            'transcript_file': transcript_file,
-            'extended_report_file': extended_report_file,
-        }
-
-        return export_buttons, export_files
+        return export_json_btn, json_file, export_transcript_btn, transcript_file
 
     def _wire_event_handlers(
         self,
-        start_btn, submit_btn, clear_btn, refresh_viz_btn,
-        export_buttons, export_files,
-        concept_input, user_input, chatbot,
-        session_id_display, graph_stats,
-        delta_summary, new_nodes_display, new_edges_display,
-        token_usage_display,
-        graph_plot, nodes_table, edges_table
+        start_btn, submit_btn, clear_btn, refresh_btn,
+        export_json_btn, export_transcript_btn,
+        concept_input, concept_file_dropdown, user_input, chatbot,
+        session_id_display, graph_stats, concept_display, status_text,
+        nodes_table, edges_table, graph_summary,
+        json_file, transcript_file
     ):
         """Wire all event handlers to UI components."""
 
         # Start interview
         start_btn.click(
             fn=self.start_interview_with_concept,
-            inputs=[concept_input],
+            inputs=[concept_input, concept_file_dropdown],
             outputs=[
                 chatbot,
                 graph_stats,
                 session_id_display,
-                new_nodes_display,
-                new_edges_display,
-                delta_summary,
-                token_usage_display,
+                concept_display,
+                nodes_table,
+                edges_table,
+                status_text
             ],
         )
 
@@ -896,10 +702,9 @@ See JSON/GraphML files for detailed graph data.
                 user_input,
                 graph_stats,
                 session_id_display,
-                new_nodes_display,
-                new_edges_display,
-                delta_summary,
-                token_usage_display,
+                nodes_table,
+                edges_table,
+                status_text
             ],
         )
 
@@ -912,82 +717,83 @@ See JSON/GraphML files for detailed graph data.
                 user_input,
                 graph_stats,
                 session_id_display,
-                new_nodes_display,
-                new_edges_display,
-                delta_summary,
-                token_usage_display,
+                nodes_table,
+                edges_table,
+                status_text
             ],
         )
 
         # Clear button
         clear_btn.click(
             fn=lambda: (
-                [],
-                "",
-                {"nodes": 0, "edges": 0, "coverage": "0%", "turns": 0, "has_llm": False, "provider": "none"},
-                "Not started",
+                [],  # chatbot
+                "",  # user_input
+                {"nodes": 0, "edges": 0, "coverage": "0/0", "turns": 0, "status": "ready", "completion_reason": None},  # graph_stats
+                "Not started",  # session_id_display
+                "No concept loaded",  # concept_display
+                [],  # nodes_table
+                [],  # edges_table
+                "Ready to start"  # status_text
             ),
-            outputs=[chatbot, user_input, graph_stats, session_id_display],
+            outputs=[chatbot, user_input, graph_stats, session_id_display, concept_display, nodes_table, edges_table, status_text],
         )
 
-        # Refresh visualization
-        refresh_viz_btn.click(
-            fn=self.refresh_visualization,
-            outputs=[graph_plot, nodes_table, edges_table],
+        # Refresh graph data
+        refresh_btn.click(
+            fn=lambda: self._refresh_graph_data() if self.current_controller else ([], [], "No active session"),
+            outputs=[nodes_table, edges_table, graph_summary]
         )
 
         # Export handlers
-        export_buttons['export_graphml_btn'].click(
-            fn=self.export_graphml_file,
-            outputs=[export_files['graphml_file']],
-        )
-
-        export_buttons['export_json_btn'].click(
+        export_json_btn.click(
             fn=self.export_json_file,
-            outputs=[export_files['json_file']],
+            outputs=[json_file],
         )
 
-        export_buttons['export_transcript_btn'].click(
+        export_transcript_btn.click(
             fn=self.export_transcript_file,
-            outputs=[export_files['transcript_file']],
+            outputs=[transcript_file],
         )
 
-        export_buttons['export_extended_report_btn'].click(
-            fn=self.export_extended_report_file,
-            outputs=[export_files['extended_report_file']],
-        )
+    def _refresh_graph_data(self) -> Tuple[List[List], List[List], str]:
+        """Refresh graph data for tables."""
+        if not self.current_controller:
+            return [], [], "No active session"
+        
+        nodes_data, edges_data = self._get_graph_table_data(self.current_controller.graph)
+        summary = self.current_controller.graph.summary()
+        
+        return nodes_data, edges_data, summary
 
     def build_interface(self) -> gr.Blocks:
         """Build the Gradio interface with event handlers wired inside Blocks context."""
-        with gr.Blocks(title="AI Interview Assistant v2") as app:
+        with gr.Blocks(title="AI Interview Assistant (NEW Architecture)") as app:
             # Build UI sections using helper methods
             self._build_header()
-            concept_input, start_btn = self._build_concept_input_section()
+            concept_input, concept_file_dropdown, start_btn, status_text = self._build_concept_input_section()
 
             with gr.Tabs():
                 # Interview tab
                 (chatbot, user_input, submit_btn, clear_btn,
-                 session_id_display, graph_stats, delta_summary,
-                 new_nodes_display, new_edges_display, token_usage_display) = self._build_interview_tab()
+                 session_id_display, graph_stats, concept_display) = self._build_interview_tab()
 
-                # Visualization tab
-                graph_plot, refresh_viz_btn, nodes_table, edges_table = self._build_visualization_tab()
+                # Graph tab
+                nodes_table, edges_table, refresh_btn, graph_summary = self._build_graph_tab()
 
                 # Export tab
-                export_buttons, export_files = self._build_export_tab()
+                export_json_btn, json_file, export_transcript_btn, transcript_file = self._build_export_tab()
 
-            # Wire event handlers INSIDE context (THIS FIXES THE BUG)
+            # Wire event handlers INSIDE context
             self._wire_event_handlers(
-                start_btn, submit_btn, clear_btn, refresh_viz_btn,
-                export_buttons, export_files,
-                concept_input, user_input, chatbot,
-                session_id_display, graph_stats,
-                delta_summary, new_nodes_display, new_edges_display,
-                token_usage_display,
-                graph_plot, nodes_table, edges_table
+                start_btn, submit_btn, clear_btn, refresh_btn,
+                export_json_btn, export_transcript_btn,
+                concept_input, concept_file_dropdown, user_input, chatbot,
+                session_id_display, graph_stats, concept_display, status_text,
+                nodes_table, edges_table, graph_summary,
+                json_file, transcript_file
             )
 
-        logger.info("Gradio interface v2 built and event handlers wired")
+        logger.info("Gradio interface (NEW architecture) built and event handlers wired")
         return app
 
 
@@ -998,20 +804,27 @@ def launch_app(share: bool = False, server_name: str = "0.0.0.0", server_port: i
     Args:
         share: Whether to create a public share link
         server_name: Server hostname (0.0.0.0 for HF Spaces)
-        server_port: Port to run on (7860 for HF Spaces)
+        server_port: Server port
     """
     ui = InterviewUI()
     app = ui.build_interface()
-
-    logger.info(f"Launching app v2 on {server_name}:{server_port}")
-
+    
+    logger.info(f"Launching Gradio app on {server_name}:{server_port}")
     app.launch(
         server_name=server_name,
         server_port=server_port,
-        share=share,
-        show_error=True,
+        share=share
     )
 
 
 if __name__ == "__main__":
-    launch_app()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="AI Interview Assistant (NEW Architecture)")
+    parser.add_argument("--share", action="store_true", help="Create public share link")
+    parser.add_argument("--port", type=int, default=7860, help="Server port")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    
+    args = parser.parse_args()
+    
+    launch_app(share=args.share, server_name=args.host, server_port=args.port)
