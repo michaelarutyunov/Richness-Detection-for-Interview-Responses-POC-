@@ -4,6 +4,7 @@ Saves logs to project logs/ folder with rotation.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -22,9 +23,31 @@ def get_project_root() -> Path:
 
 
 def get_logs_dir() -> Path:
-    """Get or create logs directory."""
-    logs_dir = get_project_root() / "logs"
-    logs_dir.mkdir(exist_ok=True)
+    """
+    Get or create logs directory.
+
+    Uses /tmp/logs/ on HuggingFace Spaces (read-only filesystem),
+    otherwise uses project_root/logs for local development.
+
+    Returns:
+        Path: Logs directory path
+    """
+    # Detect HuggingFace Spaces environment
+    if os.getenv("SPACE_ID"):
+        # HF Spaces: use /tmp (only writable location)
+        logs_dir = Path("/tmp/logs")
+    else:
+        # Local development: use project logs directory
+        logs_dir = get_project_root() / "logs"
+
+    # Create directory with fallback
+    try:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        # Fallback to /tmp if directory not writable
+        logs_dir = Path("/tmp/logs")
+        logs_dir.mkdir(parents=True, exist_ok=True)
+
     return logs_dir
 
 

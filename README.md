@@ -298,6 +298,18 @@ Located in `prompts/extraction_prompts.yaml`, the new system provides:
 - `context/` (design docs - optional)
 - `.git/` (HF Space has its own git)
 
+### Logs on HuggingFace Spaces
+
+When deployed to HuggingFace Spaces, logs are automatically written to `/tmp/logs/` due to the read-only filesystem:
+
+- **Local development**: Logs saved to `src/logs/`
+- **HuggingFace Spaces**: Logs saved to `/tmp/logs/`
+
+Note: Logs on HF Spaces are ephemeral and cleared on Space restart.
+
+**Environment Variables**:
+- `SPACE_ID`: Auto-set by HuggingFace Spaces (do not set manually)
+
 ## 🧑‍💻 Development
 
 ### Running Tests

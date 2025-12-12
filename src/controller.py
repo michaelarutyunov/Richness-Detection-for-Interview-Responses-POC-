@@ -546,7 +546,11 @@ class InterviewController:
         self.state.last_question = generated.question
         self.state.last_strategy = strategy.id
 
-        self.logger.question_generated(generated.question, strategy.id)
+        # Only log non-empty questions
+        if generated.question:
+            self.logger.question_generated(generated.question, strategy.id)
+        else:
+            logger.warning(f"[Question] Empty question generated for strategy '{strategy.id}' - this should not happen after empty question handling")
 
         # Log turn summary and graph growth
         logger.info(

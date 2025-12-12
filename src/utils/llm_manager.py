@@ -6,11 +6,12 @@ Handles multiple providers with unified interface.
 import os
 import time
 import logging
-from typing import Dict, Optional, Any, List, Union
+from typing import Dict, Optional, Any, List, Union, Callable
 from pathlib import Path
 from enum import Enum
 from pydantic import BaseModel, Field
 import yaml
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,34 @@ try:
     HAS_OPENAI = True
 except ImportError:
     HAS_OPENAI = False
+
+
+def _call_with_timeout(func: Callable, timeout_seconds: int, *args, **kwargs) -> Any:
+    """
+    Execute function with hard timeout using ThreadPoolExecutor.
+
+    This provides application-level timeout enforcement independent of SDK timeouts,
+    which may not be respected by all providers (notably Kimi API).
+
+    Args:
+        func: Function to execute
+        timeout_seconds: Maximum execution time in seconds
+        *args, **kwargs: Arguments to pass to func
+
+    Returns:
+        Return value from func
+
+    Raises:
+        FuturesTimeoutError: If execution exceeds timeout
+    """
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except FuturesTimeoutError as e:
+            logger.error(f"[LLM Timeout] Hard timeout exceeded {timeout_seconds}s")
+            future.cancel()
+            raise TimeoutError(f"Operation exceeded {timeout_seconds}s timeout") from e
 
 
 class TaskType(str, Enum):
@@ -209,6 +238,7 @@ class LLMManager:
             TaskType.QUESTION_GENERATION: "question_generation",
             TaskType.EXTRACTABILITY_CHECK: "graph_extraction",  # Use same as extraction
             TaskType.MOMENTUM_ASSESSMENT: "graph_extraction",
+            TaskType.PLAUSIBILITY_CHECK: "graph_extraction",  # Use same as extraction
         }
         spec_name = spec_map.get(task, "graph_extraction")
         return self.config.extraction_specs.get(spec_name, ExtractionSpec())
@@ -383,17 +413,25 @@ class LLMManager:
         max_tokens: int,
         timeout: int
     ) -> Dict:
-        """Execute Anthropic API call."""
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_prompt}
-            ],
-            timeout=timeout
-        )
+        """Execute Anthropic API call with hard timeout enforcement."""
+        def _make_api_call():
+            return client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ],
+                timeout=timeout  # SDK timeout
+            )
+
+        try:
+            # Enforce hard timeout at application level
+            response = _call_with_timeout(_make_api_call, timeout)
+        except TimeoutError as e:
+            logger.error(f"[LLM Timeout] anthropic/{model} exceeded {timeout}s (hard timeout): {e}")
+            raise
 
         content = response.content[0].text if response.content else ""
         input_tokens = response.usage.input_tokens if response.usage else 0
@@ -412,17 +450,25 @@ class LLMManager:
         max_tokens: int,
         timeout: int
     ) -> Dict:
-        """Execute OpenAI-compatible API call."""
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            timeout=timeout,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
+        """Execute OpenAI-compatible API call with hard timeout enforcement."""
+        def _make_api_call():
+            return client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=timeout,  # SDK timeout (may not be enforced)
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+
+        try:
+            # Enforce hard timeout at application level
+            response = _call_with_timeout(_make_api_call, timeout)
+        except TimeoutError as e:
+            logger.error(f"[LLM Timeout] {provider_name}/{model} exceeded {timeout}s (hard timeout): {e}")
+            raise
 
         content = response.choices[0].message.content if response.choices else ""
         if not content:
@@ -445,7 +491,7 @@ class LLMManager:
         tools: List[Dict[str, Any]],
         tool_choice: Optional[Dict[str, Any]] = None
     ) -> Dict:
-        """Execute OpenAI-compatible API call with function calling."""
+        """Execute OpenAI-compatible API call with function calling and hard timeout enforcement."""
         # Build tool_choice - default to requiring the first tool
         if tool_choice is None and tools:
             tool_choice = {
@@ -453,18 +499,26 @@ class LLMManager:
                 "function": {"name": tools[0]["function"]["name"]}
             }
 
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            timeout=timeout,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            tools=tools,
-            tool_choice=tool_choice
-        )
+        def _make_api_call():
+            return client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=timeout,  # SDK timeout (may not be enforced)
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                tools=tools,
+                tool_choice=tool_choice
+            )
+
+        try:
+            # Enforce hard timeout at application level
+            response = _call_with_timeout(_make_api_call, timeout)
+        except TimeoutError as e:
+            logger.error(f"[LLM Timeout] {provider_name}/{model} exceeded {timeout}s (hard timeout, with tools): {e}")
+            raise
 
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
@@ -499,7 +553,7 @@ class LLMManager:
         tools: List[Dict[str, Any]],
         timeout: int
     ) -> Dict:
-        """Execute Anthropic API call with function calling (tools)."""
+        """Execute Anthropic API call with function calling (tools) and hard timeout enforcement."""
         # Convert OpenAI-style tools to Anthropic format
         anthropic_tools = []
         for tool in tools:
@@ -510,17 +564,25 @@ class LLMManager:
                     "input_schema": tool["function"].get("parameters", {})
                 })
 
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_prompt}
-            ],
-            tools=anthropic_tools,
-            timeout=timeout
-        )
+        def _make_api_call():
+            return client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ],
+                tools=anthropic_tools,
+                timeout=timeout  # SDK timeout
+            )
+
+        try:
+            # Enforce hard timeout at application level
+            response = _call_with_timeout(_make_api_call, timeout)
+        except TimeoutError as e:
+            logger.error(f"[LLM Timeout] anthropic/{model} exceeded {timeout}s (hard timeout, with tools): {e}")
+            raise
 
         content = ""
         function_call = None

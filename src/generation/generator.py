@@ -6,6 +6,7 @@ Produces natural questions based on strategy and context.
 import logging
 import re
 import json
+import time
 from typing import Optional, List, Dict, Any, Tuple
 from pydantic import BaseModel, Field
 
@@ -274,7 +275,11 @@ Generate a natural clarification question."""
         Returns tuple of (list of (node, plausibility_score) sorted by score descending, llm_response).
         """
         if not candidate_nodes:
+            logger.debug(f"[Plausibility] No candidates for '{isolated_node.label}'")
             return [], None
+
+        logger.info(f"[Plausibility] Starting check for '{isolated_node.label}' with {len(candidate_nodes)} candidates")
+        start_time = time.time()
 
         system_prompt = """You are assessing whether concepts from an interview could plausibly be connected.
 
@@ -303,17 +308,20 @@ Candidate concepts to potentially connect:
 
 For each candidate, assess plausibility of a meaningful connection."""
 
-        response = self.llm.complete(
-            task=TaskType.PLAUSIBILITY_CHECK,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=0.2
-        )
-
-        if not response.success:
-            return [(n, 0.5) for n in candidate_nodes], response
-
         try:
+            response = self.llm.complete(
+                task=TaskType.PLAUSIBILITY_CHECK,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.2
+            )
+            elapsed = time.time() - start_time
+            logger.info(f"[Plausibility] LLM call completed in {elapsed:.1f}s")
+
+            if not response.success:
+                logger.warning(f"[Plausibility] LLM call failed: {response.error}")
+                return [(n, 0.5) for n in candidate_nodes], response
+
             data = json.loads(response.content)
             label_to_node = {n.label: n for n in candidate_nodes}
             results = []
@@ -322,9 +330,24 @@ For each candidate, assess plausibility of a meaningful connection."""
                 plausibility = conn.get("plausibility", 0.5)
                 if label in label_to_node:
                     results.append((label_to_node[label], plausibility))
+
+            viable_count = sum(1 for _, score in results if score > 0.5)
+            logger.info(f"[Plausibility] Found {viable_count}/{len(results)} viable connections (score > 0.5)")
             return sorted(results, key=lambda x: x[1], reverse=True), response
-        except Exception:
+
+        except json.JSONDecodeError as e:
+            elapsed = time.time() - start_time
+            logger.error(f"[Plausibility] JSON parsing failed after {elapsed:.1f}s: {e}")
+            logger.error(f"[Plausibility] Raw response: {response.content[:200] if hasattr(response, 'content') else 'N/A'}")
             return [(n, 0.5) for n in candidate_nodes], response
+        except TimeoutError as e:
+            elapsed = time.time() - start_time
+            logger.error(f"[Plausibility] Timeout after {elapsed:.1f}s: {e}")
+            raise  # Re-raise to bubble up
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"[Plausibility] Unexpected error after {elapsed:.1f}s: {type(e).__name__}: {e}")
+            return [(n, 0.5) for n in candidate_nodes], None
 
     def _get_connection_candidates(self, graph: Graph, isolated_node: Node) -> List[Node]:
         """Get candidate nodes for connecting an isolated node."""

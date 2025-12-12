@@ -5,8 +5,8 @@
 # ============================================================================
 # SECTION 1: MODEL SELECTION - Easy to change
 # ============================================================================
-graph_extraction_model: "deepseek"      # Options: anthropic, kimi, openai, deepseek
-question_generation_model: "kimi" # Options: anthropic, kimi, openai, deepseek
+graph_extraction_model: "kimi"      # Options: anthropic, kimi, openai, deepseek
+question_generation_model: "anthropic" # Options: anthropic, kimi, openai, deepseek
 
 # ============================================================================
 # SECTION 2: EXTRACTION SPECS - Provider-agnostic parameters
@@ -39,12 +39,12 @@ providers:
     models:
       graph_extraction:
         name: "kimi-k2-0905-preview"
-        request_timeout: 30
+        request_timeout: 15
         cost_input: 0.60
         cost_output: 2.50
       question_generation:
         name: "kimi-k2-turbo-preview"
-        request_timeout: 45
+        request_timeout: 20
         cost_input: 1.15
         cost_output: 8.00
 
@@ -55,12 +55,12 @@ providers:
     models:
       graph_extraction:
         name: "claude-haiku-4-5-20251001"
-        request_timeout: 30
+        request_timeout: 15
         cost_input: 1.00
         cost_output: 5.00
       question_generation:
         name: "claude-sonnet-4-5"
-        request_timeout: 45
+        request_timeout: 20
         cost_input: 3.00
         cost_output: 15.00
 
@@ -88,12 +88,12 @@ providers:
     models:
       graph_extraction:
         name: "deepseek-chat"
-        request_timeout: 30
+        request_timeout: 15
         cost_input: 0.27
         cost_output: 1.10
       question_generation:
         name: "deepseek-chat"
-        request_timeout: 45
+        request_timeout: 20
         cost_input: 0.27
         cost_output: 1.10
 

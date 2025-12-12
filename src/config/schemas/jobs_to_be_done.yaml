@@ -1,0 +1,182 @@
+# Jobs-to-Be-Done Schema
+# Defines node types, edge types, and extraction guidance for JTBD causal structure
+
+schema:
+  name: "jobs_to_be_done"
+  description: "JTBD causal structure linking circumstances and struggles to functional, emotional, and social jobs, desired outcomes, and solution criteria."
+  version: "1.0.0"
+
+  node_types:
+
+    circumstance:
+      name: "circumstance"
+      description: "Contextual triggers or situations that set up the job. External facts, environment, constraints."
+      is_terminal: false
+      llm_prompt: |
+        Situational context or setup that triggers the job.
+        Examples: 'busy morning', 'running late for work', 'limited fridge space', 'making coffee at home', 'hot weather'
+        NOT: struggles, jobs, desired outcomes, or solutions.
+      examples:
+        - "busy morning"
+        - "making coffee at home"
+        - "limited fridge space"
+
+    struggle:
+      name: "struggle"
+      description: "The friction, frustration, or difficulty the consumer faces in the circumstance."
+      is_terminal: false
+      llm_prompt: |
+        The specific friction or difficulty experienced in the circumstance.
+        Examples: 'plant milks taste thin', 'foam collapses instantly', 'coffee ritual feels unsatisfying', 'spills easily', 'not consistent'
+        Focus on negative tension or undesirable current state.
+      examples:
+        - "plant milks taste thin"
+        - "foam collapses"
+        - "ritual feels unsatisfying"
+
+    functional_job:
+      name: "functional_job"
+      description: "The practical progress the consumer is trying to make (what they are trying to get done)."
+      is_terminal: false
+      llm_prompt: |
+        The practical progress the user wants to achieve that solves a struggle.
+        This is NOT the feature or solution, but the job itself.
+        Examples: 'create a satisfying coffee texture', 'maintain consistent flavor', 'prepare coffee quickly', 'avoid mess'
+      examples:
+        - "create satisfying coffee texture"
+        - "maintain consistent flavor"
+
+    emotional_job:
+      name: "emotional_job"
+      description: "The internal emotional progress or state the consumer seeks."
+      is_terminal: false
+      llm_prompt: |
+        Emotional progress or internal state the user is aiming for.
+        Examples: 'feel confident in morning routine', 'feel treated', 'feel less stressed', 'feel like a coffee person'
+        NOT: functional outcomes or values.
+      examples:
+        - "feel confident"
+        - "feel treated"
+        - "feel less stressed"
+
+    social_job:
+      name: "social_job"
+      description: "The progress they seek relative to others (identity, social perception)."
+      is_terminal: false
+      llm_prompt: |
+        Social meaning or identity the user seeks to express or maintain.
+        Examples: 'appear knowledgeable about coffee', 'signal healthy choices', 'avoid looking inexperienced'
+      examples:
+        - "signal healthy choices"
+        - "appear knowledgeable"
+
+    desired_outcome:
+      name: "desired_outcome"
+      description: "Success criteria or measures of progress—what 'good enough' looks like."
+      is_terminal: false
+      llm_prompt: |
+        Clear, measurable criteria for 'progress achieved'.
+        Examples: 'stable foam for 2 minutes', 'consistent creaminess every morning', 'no separation in coffee', 'predictable taste'
+        NOT: jobs or struggles.
+      examples:
+        - "stable foam"
+        - "consistent creaminess"
+
+    solution_attribute:
+      name: "solution_attribute"
+      description: "Solution mechanism, ingredient, feature, or technology the respondent mentions as relevant."
+      is_terminal: false
+      llm_prompt: |
+        Specific features, mechanisms, or product attributes mentioned as enablers.
+        Examples: 'enzyme process', 'Scandinavian oats', 'no thickeners', 'higher protein formula'
+        NOT: desired outcomes (those are effects, not attributes).
+      examples:
+        - "enzyme process"
+        - "no thickeners"
+
+    constraint:
+      name: "constraint"
+      description: "Trade-offs or boundaries that limit acceptable solutions."
+      is_terminal: true
+      llm_prompt: |
+        Hard constraints, boundaries, dealbreakers, or non-negotiables.
+        Examples: 'must be natural', 'must not add sugar', 'cannot be expensive', 'no artificial additives'
+        These are terminal nodes in JTBD (they do not ladder up).
+      examples:
+        - "must be natural"
+        - "cannot be expensive"
+
+  edge_types:
+
+    triggers:
+      name: "triggers"
+      description: "Circumstance leads to or sets up the struggle."
+      valid_sources: ["circumstance"]
+      valid_targets: ["struggle"]
+      llm_prompt: |
+        Use when the situation directly creates or exposes a struggle.
+        Example: 'busy morning' → triggers → 'no time to fix bad foam'
+
+    leads_to:
+      name: "leads_to"
+      description: "A causes or enables B in JTBD causal hierarchy."
+      valid_sources: ["struggle", "functional_job", "emotional_job", "social_job", "solution_attribute"]
+      valid_targets: ["functional_job", "emotional_job", "social_job", "desired_outcome"]
+      llm_prompt: |
+        Use for upward causal flow:
+        - struggle → functional_job
+        - functional_job → emotional_job
+        - functional_job → desired_outcome
+        - emotional/social jobs → desired_outcome
+        Must reflect causality, not chronology.
+
+    helps_with:
+      name: "helps_with"
+      description: "A solution attribute helps accomplish a job or desired outcome."
+      valid_sources: ["solution_attribute"]
+      valid_targets: ["functional_job", "emotional_job", "social_job", "desired_outcome"]
+      llm_prompt: |
+        Use when the respondent names a feature/attribute that helps complete a job or achieve a desired outcome.
+        Example: 'enzyme process' → helps_with → 'consistent creaminess'
+
+    blocks:
+      name: "blocks"
+      description: "A constraint or obstacle that prevents progress."
+      valid_sources: ["circumstance", "constraint", "struggle"]
+      valid_targets: ["functional_job", "desired_outcome"]
+      llm_prompt: |
+        Use when the respondent states something that prevents progress.
+        Example: 'no time' → blocks → 'prepare a good coffee'
+
+    relates_to:
+      name: "relates_to"
+      description: "Ambiguous or thematic linkage when causal direction is unclear."
+      valid_sources: ["circumstance", "struggle", "functional_job", "emotional_job", "social_job", "desired_outcome", "solution_attribute", "constraint"]
+      valid_targets: ["circumstance", "struggle", "functional_job", "emotional_job", "social_job", "desired_outcome", "solution_attribute", "constraint"]
+      llm_prompt: |
+        Use when relationship is present but not clearly causal.
+        Examples: 'reminds me of mornings in Italy', 'similar to barista milk'
+
+  extraction_guidance: |
+    Node classification priorities:
+    - Circumstance = context
+    - Struggle = problem/tension
+    - Functional job = practical progress
+    - Emotional/Social job = internal/identity progress
+    - Desired outcome = measurable success
+    - Solution attribute = features/technologies
+    - Constraint = non-negotiables
+
+    Always prefer the more concrete node type when uncertain.
+
+    Edge selection:
+    - Situation → Struggle = triggers
+    - Struggle → Job = leads_to
+    - Feature → Job/Outcome = helps_with
+    - Constraint/Obstacle → Job/Outcome = blocks
+    - If unclear: relate_using "relates_to"
+
+metadata:
+  author: "Interview Agent Team"
+  created_date: "2025-01-01"
+  updated_date: "2025-01-01"
