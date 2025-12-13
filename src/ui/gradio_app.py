@@ -90,14 +90,30 @@ class InterviewUI:
         try:
             if not self.concepts_dir.exists():
                 return []
-            
+
             concept_files = []
             for file_path in self.concepts_dir.glob("*.md"):
                 concept_files.append(file_path.name)
-            
+
             return sorted(concept_files)
         except Exception as e:
             logger.error(f"Error listing concepts: {e}")
+            return []
+
+    def get_available_schemas(self) -> List[str]:
+        """Get list of available schema files."""
+        try:
+            schemas_dir = self.config_dir / "schemas"
+            if not schemas_dir.exists():
+                return []
+
+            schema_files = []
+            for file_path in schemas_dir.glob("*.yaml"):
+                schema_files.append(file_path.stem)  # Get filename without extension
+
+            return sorted(schema_files)
+        except Exception as e:
+            logger.error(f"Error listing schemas: {e}")
             return []
 
     def parse_concept_text(self, concept_text: str, concept_name: str = "User Concept") -> ParsedConcept:
@@ -130,7 +146,7 @@ class InterviewUI:
             )
 
     async def start_interview_with_concept(
-        self, concept_text: str, selected_concept_file: Optional[str] = None
+        self, concept_text: str, selected_concept_file: Optional[str] = None, selected_schema: Optional[str] = None
     ) -> Tuple[List[Dict], Dict, str, str, List[List], List[List], Dict]:
         """Start new interview with concept description or file."""
         if not concept_text.strip() and not selected_concept_file:
@@ -148,17 +164,29 @@ class InterviewUI:
         try:
             # Setup LLM manager if not already done
             has_llm = self.setup_llm_manager()
-            
+
+            # Determine schema path from selected schema
+            if selected_schema:
+                schema_path = self.config_dir / "schemas" / f"{selected_schema}.yaml"
+            else:
+                schema_path = self.schema_path  # Fallback to default
+
+            # Validate schema exists
+            if not schema_path.exists():
+                raise FileNotFoundError(f"Schema file not found: {schema_path}")
+
+            logger.info(f"Using schema: {schema_path.name}")
+
             # Determine concept source
             if selected_concept_file and selected_concept_file != "None":
                 # Load from file
                 concept_path = self.concepts_dir / selected_concept_file
                 if not concept_path.exists():
                     raise FileNotFoundError(f"Concept file not found: {concept_path}")
-                
+
                 controller = InterviewController.from_concept_file(
                     concept_path=str(concept_path),
-                    schema_path=str(self.schema_path),
+                    schema_path=str(schema_path),
                     logic_path=str(self.logic_path),
                     llm_config_path=str(self.llm_config_path),
                     max_turns=20
@@ -169,10 +197,10 @@ class InterviewUI:
                 # Parse provided text
                 concept = self.parse_concept_text(concept_text, "User Concept")
                 element_config = concept.get_element_config()
-                
+
                 controller = InterviewController.initialize(
                     concept_text=concept.description,
-                    schema_path=str(self.schema_path),
+                    schema_path=str(schema_path),
                     logic_path=str(self.logic_path),
                     llm_config_path=str(self.llm_config_path),
                     element_config=element_config,
@@ -542,7 +570,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                     lines=2,
                     value="A premium coffee subscription service that delivers freshly roasted beans from local roasters every month.",
                 )
-            
+
             with gr.Column(scale=1):
                 gr.Markdown("### Or Load from File")
                 available_concepts = self.get_available_concepts()
@@ -552,7 +580,18 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                     value="None",
                     info="Choose a concept file or use text input above"
                 )
-        
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("### Step 2: Select Methodology Schema")
+                available_schemas = self.get_available_schemas()
+                schema_dropdown = gr.Dropdown(
+                    choices=available_schemas,
+                    label="Interview Methodology",
+                    value="means_end_chain" if "means_end_chain" in available_schemas else (available_schemas[0] if available_schemas else None),
+                    info="Choose which methodology framework to use for the interview"
+                )
+
         with gr.Row():
             start_btn = gr.Button("Start Interview", variant="primary", size="lg")
             status_text = gr.Textbox(
@@ -562,7 +601,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 max_lines=1
             )
 
-        return concept_input, concept_file_dropdown, start_btn, status_text
+        return concept_input, concept_file_dropdown, schema_dropdown, start_btn, status_text
 
     def _build_interview_tab(self) -> Tuple:
         """Build interview chat tab."""
@@ -747,7 +786,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
         self,
         start_btn, submit_btn, clear_btn, download_graph_btn,
         export_json_btn, export_transcript_btn,
-        concept_input, concept_file_dropdown, user_input, chatbot,
+        concept_input, concept_file_dropdown, schema_dropdown, user_input, chatbot,
         session_id_display, graph_stats, concept_display, status_text,
         nodes_table, edges_table, graph_data_file, graph_summary,
         json_file, transcript_file
@@ -757,7 +796,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
         # Start interview
         start_btn.click(
             fn=self.start_interview_with_concept,
-            inputs=[concept_input, concept_file_dropdown],
+            inputs=[concept_input, concept_file_dropdown, schema_dropdown],
             outputs=[
                 chatbot,
                 graph_stats,
@@ -836,7 +875,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
         with gr.Blocks(title="AI Interview Assistant (NEW Architecture)") as app:
             # Build UI sections using helper methods
             self._build_header()
-            concept_input, concept_file_dropdown, start_btn, status_text = self._build_concept_input_section()
+            concept_input, concept_file_dropdown, schema_dropdown, start_btn, status_text = self._build_concept_input_section()
 
             with gr.Tabs():
                 # Interview tab
@@ -853,7 +892,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
             self._wire_event_handlers(
                 start_btn, submit_btn, clear_btn, download_graph_btn,
                 export_json_btn, export_transcript_btn,
-                concept_input, concept_file_dropdown, user_input, chatbot,
+                concept_input, concept_file_dropdown, schema_dropdown, user_input, chatbot,
                 session_id_display, graph_stats, concept_display, status_text,
                 nodes_table, edges_table, graph_data_file, graph_summary,
                 json_file, transcript_file

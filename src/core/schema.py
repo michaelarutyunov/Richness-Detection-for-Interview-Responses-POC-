@@ -176,17 +176,17 @@ class Schema(BaseModel):
         return self.node_types[node_type].is_terminal
     
     def get_valid_edge_types(
-        self, 
-        source_type: str, 
+        self,
+        source_type: str,
         target_type: str
     ) -> List[str]:
         """
         Get all edge types valid between two node types.
-        
+
         Args:
             source_type: Node type of source
             target_type: Node type of target
-            
+
         Returns:
             List of valid edge type names
         """
@@ -196,7 +196,27 @@ class Schema(BaseModel):
                 target_type in edge_def.valid_targets):
                 valid.append(edge_name)
         return valid
-    
+
+    def get_default_edge_type(self) -> str:
+        """
+        Get default edge type for fallback when LLM doesn't specify one.
+
+        Returns first edge type from schema, prioritizing 'relates_to' if available.
+        This ensures schema-agnostic fallback behavior.
+
+        Returns:
+            Default edge type name
+        """
+        if not self.edge_types:
+            return "relates_to"  # Ultimate fallback
+
+        # Prefer 'relates_to' if available (most generic edge type)
+        if "relates_to" in self.edge_types:
+            return "relates_to"
+
+        # Otherwise return first edge type
+        return next(iter(self.edge_types.keys()))
+
     def get_node_type_order(self) -> List[str]:
         """
         Get node types in hierarchical order (concrete to abstract).
@@ -293,7 +313,66 @@ class Schema(BaseModel):
             lines.append(self.extraction_guidance.strip())
         
         return "\n".join(lines)
-    
+
+    def validate_extraction_result(self, nodes: List, edges: List, strict: bool = False) -> List[str]:
+        """
+        Validate extraction result quality.
+
+        Args:
+            nodes: List of Node objects extracted
+            edges: List of Edge objects extracted
+            strict: If True, return errors; if False, return warnings
+
+        Returns:
+            List of validation warnings/errors
+        """
+        warnings = []
+
+        # Check edge-to-node ratio
+        if len(nodes) > 0:
+            ratio = len(edges) / len(nodes)
+            if ratio < 0.3:
+                warnings.append(
+                    f"Low edge density: {ratio:.2f} (target >0.5). "
+                    f"Extracted {len(edges)} edges for {len(nodes)} nodes."
+                )
+
+        # Check for isolated nodes (nodes not in any edge)
+        if nodes and edges:
+            node_ids = {getattr(n, 'id', None) for n in nodes}
+            connected_ids = set()
+            for e in edges:
+                if hasattr(e, 'source_id'):
+                    connected_ids.add(e.source_id)
+                if hasattr(e, 'target_id'):
+                    connected_ids.add(e.target_id)
+
+            isolated = node_ids - connected_ids - {None}
+            if isolated and len(isolated) / len(node_ids) > 0.5:
+                warnings.append(
+                    f"High isolation: {len(isolated)}/{len(node_ids)} nodes not connected to any edge"
+                )
+
+        # Check for invalid edge types
+        for edge in edges:
+            relation_type = getattr(edge, 'relation_type', None)
+            if relation_type and relation_type not in self.edge_types:
+                warnings.append(
+                    f"Invalid edge type: '{relation_type}' not in schema edge types: "
+                    f"{list(self.edge_types.keys())}"
+                )
+
+        # Check for invalid node types
+        for node in nodes:
+            node_type = getattr(node, 'node_type', None)
+            if node_type and node_type not in self.node_types:
+                warnings.append(
+                    f"Invalid node type: '{node_type}' not in schema node types: "
+                    f"{list(self.node_types.keys())}"
+                )
+
+        return warnings
+
     def validate_graph(self, graph: "Graph") -> List[str]:
         """
         Validate a graph against this schema.

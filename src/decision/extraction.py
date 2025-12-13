@@ -6,7 +6,7 @@ Includes extractability check and momentum assessment.
 import json
 import logging
 import re
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Set
 from pydantic import BaseModel, Field
 
 from core.graph import Graph, Node, Edge
@@ -34,7 +34,7 @@ EXTRACTION_TOOL = {
                     "description": "List of extracted concept nodes",
                     "items": {
                         "type": "object",
-                        "required": ["label", "node_type", "quote", "element_mapping"],
+                        "required": ["label", "node_type", "quote"],
                         "properties": {
                             "label": {
                                 "type": "string",
@@ -136,17 +136,293 @@ class Extractor:
     Extracts graph structure from respondent text.
     Uses LLM for natural language understanding.
     """
-    
+
     def __init__(
         self,
         schema: Schema,
         coverage_state: CoverageState,
-        llm_manager: LLMManager
+        llm_manager: LLMManager,
+        config: Optional[Dict] = None
     ):
         self.schema = schema
         self.coverage_state = coverage_state
         self.llm = llm_manager
-    
+
+        # Semantic deduplication configuration
+        self.config = config or {}
+        dedup_config = self.config.get("extraction", {}).get("semantic_deduplication", {})
+
+        self.dedup_method = dedup_config.get("method", "hybrid")
+        self.jaccard_threshold = dedup_config.get("jaccard_threshold", 0.75)
+        self.embeddings_enabled = dedup_config.get("embeddings_enabled", True)
+        self.embeddings_threshold = dedup_config.get("embeddings_threshold", 0.80)
+
+        # Embedding model and cache (lazy loaded)
+        self._embedding_model = None
+        self._embedding_cache: Dict[str, Any] = {}
+
+        # Load embedding model eagerly if enabled
+        if self.embeddings_enabled:
+            self._load_embedding_model()
+
+        logger.info(
+            f"[Extraction] Semantic deduplication initialized: method={self.dedup_method}, "
+            f"jaccard_threshold={self.jaccard_threshold}, embeddings_enabled={self.embeddings_enabled}, "
+            f"embeddings_threshold={self.embeddings_threshold}"
+        )
+
+    # =========================================================================
+    # SEMANTIC DEDUPLICATION METHODS (Phase 2A + 2B)
+    # =========================================================================
+
+    def _lemmatize_phrase(self, phrase: str) -> Set[str]:
+        """
+        Lemmatize a phrase by removing common suffixes and expanding synonyms.
+
+        Phase 2A: Enhanced Jaccard similarity component.
+
+        Args:
+            phrase: Input phrase (e.g., "proper foam", "froths well")
+
+        Returns:
+            Set of lemmatized words + synonyms
+        """
+        # Synonym pairs (bidirectional)
+        SYNONYMS = {
+            "foam": {"foam", "froth"},
+            "froth": {"foam", "froth"},
+            "thick": {"thick", "heavy"},
+            "heavy": {"thick", "heavy"},
+            "thin": {"thin", "watery"},
+            "watery": {"thin", "watery"},
+            "creamy": {"creamy", "smooth"},
+            "smooth": {"creamy", "smooth"},
+        }
+
+        # Suffix removal patterns (ordered by length to avoid greedy matches)
+        SUFFIXES = ["ing", "est", "ed", "er", "ly", "s"]
+
+        # Words that should NOT be lemmatized (common false positives)
+        STOP_LEMMATIZE = {"proper", "after", "under", "over", "super", "inner", "outer"}
+
+        words = phrase.lower().split()
+        lemmatized = set()
+
+        for word in words:
+            # Skip lemmatization for certain words
+            if word in STOP_LEMMATIZE:
+                base_word = word
+            else:
+                base_word = word
+
+                # Try removing suffixes (only if results in reasonable stem)
+                for suffix in SUFFIXES:
+                    if word.endswith(suffix) and len(word) > len(suffix) + 2:
+                        potential_base = word[: -len(suffix)]
+                        # Only use if not in stop list
+                        if potential_base not in STOP_LEMMATIZE:
+                            base_word = potential_base
+                            break
+
+            # Add base word
+            lemmatized.add(base_word)
+
+            # Add synonyms if present
+            if base_word in SYNONYMS:
+                lemmatized.update(SYNONYMS[base_word])
+
+        return lemmatized
+
+    def _jaccard_similarity_with_lemmas(self, label1: str, label2: str) -> float:
+        """
+        Compute Jaccard similarity between two labels using lemmatization.
+
+        Phase 2A: Enhanced Jaccard similarity.
+
+        Args:
+            label1: First label
+            label2: Second label
+
+        Returns:
+            Similarity score (0-1)
+        """
+        lemmas1 = self._lemmatize_phrase(label1)
+        lemmas2 = self._lemmatize_phrase(label2)
+
+        if not lemmas1 or not lemmas2:
+            return 0.0
+
+        intersection = lemmas1 & lemmas2
+        union = lemmas1 | lemmas2
+
+        similarity = len(intersection) / len(union) if union else 0.0
+
+        logger.debug(
+            f"[Jaccard] '{label1}' vs '{label2}': "
+            f"lemmas1={lemmas1}, lemmas2={lemmas2}, "
+            f"intersection={intersection}, union={union}, "
+            f"similarity={similarity:.3f}"
+        )
+
+        return similarity
+
+    def _load_embedding_model(self) -> None:
+        """
+        Load sentence-transformers model for semantic similarity.
+
+        Phase 2B: Semantic embeddings.
+        Loads 'all-MiniLM-L6-v2' model (~100MB, fast inference).
+        """
+        if self._embedding_model is not None:
+            return
+
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            logger.info("[Extraction] Loading sentence-transformers model 'all-MiniLM-L6-v2'...")
+            self._embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("[Extraction] Embedding model loaded successfully")
+        except ImportError:
+            logger.warning(
+                "[Extraction] sentence-transformers not installed. "
+                "Semantic embeddings disabled. Install with: pip install sentence-transformers"
+            )
+            self.embeddings_enabled = False
+        except Exception as e:
+            logger.error(f"[Extraction] Failed to load embedding model: {e}")
+            self.embeddings_enabled = False
+
+    def _get_cached_embedding(self, label: str) -> Optional[Any]:
+        """
+        Get or compute embedding for a label with caching.
+
+        Phase 2B: Embeddings with cache optimization.
+
+        Args:
+            label: Node label
+
+        Returns:
+            Embedding vector (numpy array) or None if model unavailable
+        """
+        if not self.embeddings_enabled or self._embedding_model is None:
+            return None
+
+        # Check cache
+        if label in self._embedding_cache:
+            return self._embedding_cache[label]
+
+        # Compute embedding
+        try:
+            embedding = self._embedding_model.encode(label, convert_to_numpy=True)
+            self._embedding_cache[label] = embedding
+            logger.debug(f"[Embedding] Cached embedding for '{label}' (shape={embedding.shape})")
+            return embedding
+        except Exception as e:
+            logger.error(f"[Embedding] Failed to compute embedding for '{label}': {e}")
+            return None
+
+    def _compute_semantic_similarity(self, label1: str, label2: str) -> float:
+        """
+        Compute semantic similarity using embeddings.
+
+        Phase 2B: Semantic embeddings.
+
+        Args:
+            label1: First label
+            label2: Second label
+
+        Returns:
+            Cosine similarity (0-1)
+        """
+        emb1 = self._get_cached_embedding(label1)
+        emb2 = self._get_cached_embedding(label2)
+
+        if emb1 is None or emb2 is None:
+            return 0.0
+
+        try:
+            import numpy as np
+
+            # Cosine similarity
+            similarity = float(
+                np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+            )
+
+            logger.debug(
+                f"[Semantic] '{label1}' vs '{label2}': similarity={similarity:.3f}"
+            )
+
+            return similarity
+        except Exception as e:
+            logger.error(f"[Semantic] Failed to compute similarity: {e}")
+            return 0.0
+
+    def _find_similar_node(
+        self,
+        label: str,
+        graph: Graph,
+        node_type: str
+    ) -> Optional[Node]:
+        """
+        Find existing similar node using hybrid deduplication strategy.
+
+        Phase 2A + 2B: Hybrid semantic deduplication.
+
+        Search strategy (fast-to-slow):
+        1. Exact match (O(1) via label index)
+        2. Enhanced Jaccard with lemmas (O(n) but fast)
+        3. Semantic embeddings (O(n) but slower, if enabled)
+
+        Args:
+            label: New node label
+            graph: Current graph
+            node_type: Node type (must match for deduplication)
+
+        Returns:
+            Matching node or None
+        """
+        # Fast path 1: Exact match
+        existing = graph.get_node_by_label(label)
+        if existing and existing.node_type == node_type:
+            logger.debug(f"[Dedup] Exact match: '{label}' -> {existing.id}")
+            return existing
+
+        # Fast path 2: Enhanced Jaccard (Phase 2A)
+        for node in graph.nodes.values():
+            if node.node_type != node_type:
+                continue
+
+            jaccard_sim = self._jaccard_similarity_with_lemmas(label, node.label)
+            if jaccard_sim >= self.jaccard_threshold:
+                logger.info(
+                    f"[Dedup] Jaccard match: '{label}' ~= '{node.label}' "
+                    f"(similarity={jaccard_sim:.3f}, threshold={self.jaccard_threshold}, "
+                    f"type={node_type})"
+                )
+                return node
+
+        # Slow path: Semantic embeddings (Phase 2B)
+        if self.embeddings_enabled:
+            for node in graph.nodes.values():
+                if node.node_type != node_type:
+                    continue
+
+                semantic_sim = self._compute_semantic_similarity(label, node.label)
+                if semantic_sim >= self.embeddings_threshold:
+                    logger.info(
+                        f"[Dedup] Semantic match: '{label}' ~= '{node.label}' "
+                        f"(similarity={semantic_sim:.3f}, threshold={self.embeddings_threshold}, "
+                        f"type={node_type})"
+                    )
+                    return node
+
+        logger.debug(f"[Dedup] No match found for '{label}' (type={node_type})")
+        return None
+
+    # =========================================================================
+    # EXTRACTION METHODS
+    # =========================================================================
+
     def assess_extractability(
         self,
         response: str,
@@ -275,20 +551,35 @@ Respond with JSON:
         system_prompt = """You are assessing respondent engagement in a qualitative interview.
 
         HIGH momentum indicators:
-        - Long, elaborated responses
-        - Unprompted examples or stories
+        - Long, elaborated responses with detail
+        - Unprompted examples, stories, or concrete scenarios
         - Emotional language or emphasis
         - Self-initiated connections ("and that's also why...")
         - Enthusiasm, energy in the response
 
-        LOW momentum indicators:
-        - Short, closed responses ("yeah", "I guess")
-        - Repetition of previous answers
-        - Hedging, uncertainty ("I'm not sure really")
-        - Deflection or topic avoidance
-        - Fatigue signals
+        NEUTRAL momentum indicators (this is the EXPECTED baseline):
+        - Coherent answers with some detail
+        - No example/story but not avoiding the topic
+        - Mild emotional tone
+        - Standard conversational engagement
+        - May include THINKING-ALOUD hedging ("I guess", "to be honest") if accompanied by elaboration
 
-        NEUTRAL is the default for typical responses.
+        LOW momentum indicators:
+        - Short AND unelaborated responses ("yeah", "dunno")
+        - Repetition of previous content without new insight
+        - Signs of withdrawal or disinterest
+        - Deflection or topic avoidance
+        - Fatigue signals (sighing, "I dunno… it's whatever")
+        - Hedging ONLY WHEN the entire response stays vague
+
+        CRITICAL BALANCING RULES:
+        - If the response contains a mix of signals (e.g., hedging but also elaboration), classify as NEUTRAL
+        - Long elaboration outweighs hedging
+        - Emotional depth outweighs uncertainty
+        - A concrete example outweighs brevity
+        - Do NOT classify as "low" if the respondent expresses uncertainty while still giving a meaningful explanation
+        - Hedging during reasoning/thinking is NORMAL in exploratory interviews - not low engagement
+        - Only assign LOW when the pattern of disengagement holds across the response
 
         Respond with JSON:
         {
@@ -296,9 +587,9 @@ Respond with JSON:
         "indicators": ["list", "of", "observed", "signals"]
         }"""
 
-        # Include recent history for context
+        # Include recent history for context (increased from 3 to 5 for better trend detection)
         recent_responses = []
-        for turn in history.get_recent(3):
+        for turn in history.get_recent(5):
             recent_responses.append(f"- {turn.response[:100]}...")
         
         user_prompt = f"""Recent responses for context:
@@ -390,16 +681,37 @@ Respond with JSON:
 {elements_section}
 {sentiment_guidance}
 
+## CRITICAL: Edge Extraction Priority
+
+Edges are AS IMPORTANT as nodes. For every concept, ask: "Why?" or "What does this lead to?"
+
+**Extract edges when respondent uses:**
+- Causal language: "because", "leads to", "results in", "causes"
+- Explanations: "X is important because it gives me Y"
+- Connections: "X is related to Y", "X enables Y"
+- Sequences: "first X happens, then Y"
+
+**Minimum expectation:** 1 edge per 2 nodes
+If you extract 4 nodes, extract at least 2 edges connecting them.
+
+**Edge validation checklist:**
+1. Both nodes exist or are being created in this extraction
+2. Relationship is explicitly stated or strongly implied
+3. Relation type follows schema adjacency rules
+
 ## Extraction Rules
 
-1. **Extract ATOMIC concepts (CRITICAL)**
-   - Each node must represent ONE concept that could vary independently
-   - Break compound concepts into separate nodes:
-     * "thicker and creamier" → two nodes: "thicker", "creamier"
-     * "fast and reliable" → two nodes: "fast", "reliable"
-     * "smooth and sweet taste" → two nodes: "smooth taste", "sweet taste"
-   - Test: If two attributes could have different causes or consequences, they MUST be separate nodes
-   - Test: If you can imagine someone having one without the other, they're separate
+1. **Extract ATOMIC concepts (avoid over-fragmentation)**
+   - Each node = ONE concept that could vary independently
+   - Break compounds ONLY if respondent treats them separately:
+     * "thick and creamy" → ONE node if treated as single quality
+     * "thick and creamy" → TWO nodes if discussed separately
+
+   Test: Would respondent have mentioned one without the other?
+
+   Examples:
+   - "smooth creamy texture" → ONE node (single gestalt quality)
+   - "smooth texture, plus it's also creamy" → TWO nodes (distinct attributes)
 
 2. **Only extract what is explicitly stated or clearly implied**
    - Every node must have quote support
@@ -409,15 +721,22 @@ Respond with JSON:
    - If a concept matches an existing node, reference it by label
    - Only create new nodes for genuinely new concepts
 
-4. **Mark ambiguous concepts**
-   - If meaning is unclear, set is_ambiguous: true
-   - These will be clarified before further use
+4. **Ambiguity Detection (Mark Liberally)**
 
-5. **IMPORTANT: Map to reference elements**
-   - For EVERY node, you MUST provide an element_mapping value
-   - If a node discusses, evaluates, or relates to a reference element, use that element's ID
-   - Only use null if the node truly doesn't relate to any reference element
-   - This mapping is essential for coverage tracking
+Set **is_ambiguous: true** when:
+1. **Type uncertainty**: "smooth" (texture attribute? ease-of-use functional?)
+2. **Scope ambiguity**: "it works well" (what is "it"? what aspect "works"?)
+3. **Implicit reference**: "that", "the other one" without clear antecedent
+4. **Polysemy**: "security" (physical? data? financial?)
+5. **Vague intensifiers**: "very good", "quite nice" without specifics
+
+**Default when uncertain: FLAG IT**
+It's better to flag 10 nodes and clarify 2 than miss 1 critical ambiguity.
+
+5. **Map to reference elements (when clear)**
+   - Provide element_mapping ONLY if the node clearly discusses that element
+   - When uncertain, use null (don't force mappings)
+   - Concept extraction takes priority over element mapping
 
 ## Reaction Detection
 For each node, assess if the respondent expressed an evaluative stance toward that specific concept:
@@ -486,22 +805,30 @@ Extract nodes and edges from this response."""
         node_element_mappings = {}
         label_to_id = {}  # Track label -> node_id for edge creation
         
-        # Process nodes
+        # Process nodes with semantic deduplication
         for node_data in data.get("nodes", []):
             label = node_data.get("label", "").strip()
             if not label:
                 continue
-            
-            # Check if node already exists
-            existing = graph.get_node_by_label(label)
+
+            node_type = node_data.get("node_type")
+            if not node_type:
+                logger.warning(f"[Extraction] Node '{label}' missing node_type, skipping")
+                continue
+
+            # Check if similar node already exists (semantic deduplication)
+            existing = self._find_similar_node(label, graph, node_type)
             if existing:
                 label_to_id[label] = existing.id
+                logger.debug(
+                    f"[Extraction] Reusing existing node: '{label}' -> {existing.id} ('{existing.label}')"
+                )
                 continue
-            
+
             # Create new node
             node = Node(
                 label=label,
-                node_type=node_data.get("node_type"),
+                node_type=node_type,
                 is_ambiguous=node_data.get("is_ambiguous", False),
                 metadata={
                     "quote": node_data.get("quote", ""),
@@ -509,6 +836,7 @@ Extract nodes and edges from this response."""
             )
             nodes.append(node)
             label_to_id[label] = node.id
+            logger.debug(f"[Extraction] Created new node: '{label}' ({node_type}) -> {node.id}")
 
             # Track element mapping
             element_mapping = node_data.get("element_mapping")
@@ -543,11 +871,14 @@ Extract nodes and edges from this response."""
             
             if not source_id or not target_id:
                 continue  # Skip edges with missing nodes
-            
+
+            # Use schema-agnostic default edge type if LLM doesn't specify
+            default_edge_type = self.schema.get_default_edge_type()
+
             edge = Edge(
                 source_id=source_id,
                 target_id=target_id,
-                relation_type=edge_data.get("relation_type", "relates_to"),
+                relation_type=edge_data.get("relation_type", default_edge_type),
                 metadata={
                     "quote": edge_data.get("quote", ""),
                 }
@@ -565,6 +896,17 @@ Extract nodes and edges from this response."""
             logger.info(f"[Extraction] Edges: {edge_desc}")
         if node_element_mappings:
             logger.info(f"[Extraction] Element mappings: {node_element_mappings}")
+
+        # Validate extraction result quality
+        validation_warnings = self.schema.validate_extraction_result(
+            nodes=nodes,
+            edges=edges,
+            strict=False  # Log warnings, don't fail
+        )
+
+        if validation_warnings:
+            for warning in validation_warnings:
+                logger.warning(f"[Extraction Validation] {warning}")
 
         return ExtractionResult(
             nodes=nodes,
