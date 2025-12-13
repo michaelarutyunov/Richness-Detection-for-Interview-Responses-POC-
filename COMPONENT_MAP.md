@@ -761,8 +761,10 @@ class ScoringContext:
     coverage_state: CoverageState
     momentum: Momentum
     history: History
-    schema: Schema
+    schema: Schema  # For methodology-agnostic terminal type detection
 ```
+
+The `schema` field enables scorers to detect terminal node types across different methodologies (MEC, JTBD, etc.) using `schema.is_terminal_type()`, eliminating the need for hardcoded node type lists in scorer implementations.
 
 **Interaction Pattern**:
 ```
@@ -870,22 +872,27 @@ def score(self, strategy, focus, context) -> float:
 def score(self, strategy, focus, context) -> float:
     momentum = context.momentum.current_level
 
-    # High momentum → boost depth/breadth
+    # High momentum → boost depth strategies
     if momentum == "high":
-        if strategy.id in ["deepen_branch", "explore_breadth"]:
-            return 1.5  # 50% boost
+        if strategy.id == "deepen_branch":
+            return 1.3  # depth_boost (reduced from 1.5)
 
-    # Low momentum → boost closing/seeding
+    # Low momentum → boost breadth/seeding
     elif momentum == "low":
-        if strategy.id in ["introduce_seed"]:
-            return 1.3  # 30% boost
-        if context.momentum.is_fatigued():
-            return 0.5  # Penalty for complex strategies
+        if strategy.id == "explore_breadth":
+            return 1.1  # breadth_boost (reduced from 1.5)
+        if strategy.id == "deepen_branch":
+            return 0.2  # depth_penalty (reduced from 0.5)
 
     return 1.0  # Neutral
 ```
 
-**Weight**: 0.9
+**Parameters** (from interview_logic.yaml):
+- `breadth_boost`: 1.1 (reduced from 1.5 to prevent breadth dominance)
+- `depth_penalty`: 0.2 (reduced from 0.5 to enable more depth exploration)
+- `depth_boost`: 1.3 (for high momentum)
+
+**Weight**: 1.0
 
 ---
 
@@ -917,7 +924,7 @@ def score(self, strategy, focus, context) -> float:
 ---
 
 #### 12.5. VerticalLadderingScorer
-**Purpose**: Boost depth exploration toward abstract values.
+**Purpose**: Boost depth exploration toward terminal nodes (methodology-agnostic).
 
 **Logic**:
 ```python
@@ -937,6 +944,8 @@ def score(self, strategy, focus, context) -> float:
     return 1.0  # Neutral
 ```
 
+**Methodology-Agnostic Design**: Uses `schema.is_terminal_type()` to detect terminal nodes. Works with Means-End Chain (terminal = `value`), Jobs-to-Be-Done (terminal = `constraint`), and any future methodology that defines terminal types in schema YAML.
+
 **Weight**: 1.0
 
 ---
@@ -947,26 +956,39 @@ def score(self, strategy, focus, context) -> float:
 **Logic**:
 ```python
 def score(self, strategy, focus, context) -> float:
-    # Check if same strategy used 2+ consecutive turns
-    recent_strategies = [turn.strategy_used for turn in context.history.get_recent_turns(2)]
+    # Check if same strategy used stale_threshold+ consecutive turns
+    recent_strategies = [turn.strategy_used for turn in context.history.get_recent_turns(4)]
 
-    if len(set(recent_strategies)) == 1:  # All same
+    # Count consecutive uses of current branch strategy
+    consecutive_count = sum(1 for s in recent_strategies if s == strategy.id)
+
+    if consecutive_count >= 4:  # stale_threshold (increased from 2)
         # Boost breadth to switch topics
         if strategy.id == "explore_breadth":
-            return 2.0  # 100% boost
+            return 1.2  # breadth_boost (reduced from 2.0)
         # Penalize continuing same strategy
         elif strategy.id == recent_strategies[0]:
-            return 0.7  # 30% penalty
+            return 0.15  # depth_penalty (reduced from 0.7)
+        # Also penalize connect_isolate on stale
+        elif strategy.id == "connect_isolate":
+            return 0.5  # connect_isolate_penalty
 
     return 1.0  # Neutral
 ```
 
-**Weight**: 0.9
+**Parameters** (from interview_logic.yaml):
+- `stale_threshold`: 4 (increased from 2 - allow longer depth exploration)
+- `breadth_boost`: 1.2 (reduced from 1.8 - less aggressive breadth forcing)
+- `depth_penalty`: 0.15 (reduced from 0.3 - softer depth suppression)
+- `severe_stale_threshold`: 4
+- `connect_isolate_penalty`: 0.5 (penalize connect_isolate on stale branches)
+
+**Weight**: 1.0
 
 ---
 
 #### 12.7. CoverageQualityScorer
-**Purpose**: Prioritize first-time element coverage.
+**Purpose**: Prioritize first-time element coverage, stop drilling exhausted elements.
 
 **Logic**:
 ```python
@@ -974,14 +996,25 @@ def score(self, strategy, focus, context) -> float:
     if strategy.id == "ensure_coverage" and focus.element_id:
         # Check if element has been focused before
         if context.coverage_state.element_focus_counts.get(focus.element_id, 0) == 0:
-            return 2.5  # 150% boost for first-time coverage
+            return 2.5  # first_touch_boost: 150% boost for first-time coverage
 
-        # Penalize if exhausted
+        # Penalize if exhausted (probed multiple times without new edges)
         if focus.element_id in context.coverage_state.exhausted_elements:
-            return 0.3  # 70% penalty
+            return 1.2  # exhaustion_penalty (INVERSE: >1.0 boosts, <1.0 penalizes)
+                        # Note: This is actually a DETERRENT multiplier in the config
+                        # Implementation uses: score /= exhaustion_penalty
+                        # So 1.2 means divide by 1.2 = 0.83x penalty
 
     return 1.0  # Neutral
 ```
+
+**Parameters** (from interview_logic.yaml):
+- `first_touch_boost`: 2.5 (strong priority for new elements)
+- `exhaustion_threshold`: 2 (turns probing without new edges)
+- `exhaustion_penalty`: 1.2 (increased from 0.15 - STOP drilling exhausted elements)
+  - **Note**: In implementation, this is a divisor: `score /= exhaustion_penalty`
+  - So 1.2 means score is divided by 1.2, resulting in ~0.83x effective penalty
+  - Higher value = stronger deterrent
 
 **Weight**: 1.0
 
@@ -1010,24 +1043,60 @@ def score(self, strategy, focus, context) -> float:
 ---
 
 #### 12.9. ReflectionModeScorer
-**Purpose**: Trigger conclusion phase when appropriate.
+**Purpose**: Trigger conclusion phase when appropriate (methodology-agnostic).
 
 **Logic**:
 ```python
 def score(self, strategy, focus, context) -> float:
-    # Check closing conditions
-    coverage_complete = len(context.coverage_state.gaps) == 0
-    no_unexplored = len(context.graph_state.unexplored_nodes) == 0
-    low_momentum = context.momentum.current_level == "low"
+    # Check if should enter reflection mode
+    if not self._should_enter_reflection_mode(context):
+        return 1.0
 
-    if coverage_complete and no_unexplored and low_momentum:
-        # Signal that interview should close
-        # (Not a strategy, but affects scoring)
-        if strategy.id in ["introduce_seed"]:
-            return 0.5  # Penalize seeding (we're done)
+    # Penalize depth strategies (interview should wrap up)
+    if strategy.id in ["deepen_branch", "connect_isolate"]:
+        return 0.2  # depth_penalty
+
+    # Boost reflection strategies (encourage conclusion)
+    if strategy.id in ["synthesize", "summarize"]:
+        return 2.0  # reflection_boost
+
+    # Slight boost for breadth (explore remaining areas)
+    if strategy.id == "explore_breadth":
+        return 1.3
 
     return 1.0  # Neutral
+
+def _should_enter_reflection_mode(self, context) -> bool:
+    # Condition 1: Coverage complete
+    if context.coverage_state.gaps:
+        return False
+
+    # Condition 2: No new nodes for N recent turns
+    if not self._no_new_nodes_recently(context):
+        return False
+
+    # Condition 3: Terminal nodes exist (schema-agnostic)
+    if not self._has_terminal_nodes(context):
+        return False
+
+    return True
+
+def _has_terminal_nodes(self, context) -> bool:
+    """Check terminal nodes using schema.is_terminal_type() (methodology-agnostic)."""
+    terminal_count = 0
+    for node in context.graph.nodes.values():
+        if node.node_type and context.schema.is_terminal_type(node.node_type):
+            terminal_count += 1
+    return terminal_count >= self.min_terminal_nodes
 ```
+
+**Parameters** (from interview_logic.yaml):
+- `no_new_nodes_threshold`: 3 (turns without extraction before reflection)
+- `min_terminal_nodes`: 0 (changed from 1 - schema-agnostic, allows reflection without terminal nodes)
+- `depth_penalty`: 0.2 (strong penalty for depth strategies in reflection mode)
+- `reflection_boost`: 2.0 (strong boost for reflection strategies)
+
+**Methodology-Agnostic Design**: Uses `schema.is_terminal_type()` to detect terminal nodes. Works with Means-End Chain (terminal = `value`), Jobs-to-Be-Done (terminal = `constraint`), and any future methodology. The `min_terminal_nodes: 0` setting makes reflection mode schema-agnostic by not requiring any terminal nodes (though they boost reflection mode if present).
 
 **Weight**: 1.0
 
@@ -1062,6 +1131,11 @@ def score(self, strategy, focus, context) -> float:
 | `assess_extractability(response)` | `bool` | Check if response has extractable content |
 | `extract(response, graph, coverage_state)` | `ExtractionResult` | Extract nodes + edges from response |
 | `assess_momentum(response, history)` | `str` | Return "high" \| "medium" \| "low" |
+| `_find_existing_node_semantic(label, node_type, graph)` | `Optional[str]` | Three-tier semantic deduplication (exact → Jaccard → embeddings) |
+| `_lemmatize(text)` | `str` | Remove common suffixes for normalization |
+| `_expand_synonyms(text)` | `str` | Expand with domain-specific synonyms |
+| `_jaccard_similarity(set1, set2)` | `float` | Compute Jaccard similarity for word sets |
+| `_semantic_similarity(text1, text2)` | `float` | Compute cosine similarity using sentence embeddings |
 
 **Extraction Pipeline**:
 ```
@@ -1083,12 +1157,16 @@ def score(self, strategy, focus, context) -> float:
               │
               └──► Parse JSON
 
-3. Validation
+3. Validation + Semantic Deduplication
    ├──► For each node:
    │    ├──► Validate node_type in schema
    │    ├──► Validate element_mapping (if present)
    │    ├──► Validate reaction enum
-   │    └──► Create Node object
+   │    ├──► Check for semantic duplicates:
+   │    │    ├──► Tier 1: Exact match (hash lookup, <1ms)
+   │    │    ├──► Tier 2: Enhanced Jaccard (lemmatize + synonyms, 1-5ms)
+   │    │    └──► Tier 3: Embeddings (sentence-transformers, 10-50ms cached)
+   │    └──► Create Node object or reuse existing ID
    │
    └──► For each edge:
         ├──► Find source/target nodes by label
@@ -1100,8 +1178,12 @@ def score(self, strategy, focus, context) -> float:
    └──► For each node with element_mapping:
          └──► Link to reference element in coverage_state
 
-5. Momentum Assessment
-   └──► LLM call: "What is respondent's engagement level?"
+5. Momentum Assessment (Improved 2025-12-12)
+   └──► LLM call with explicit NEUTRAL criteria:
+         - NEUTRAL: Thinking-aloud hedging WITH elaboration ("I guess... [explanation]")
+         - LOW: Vague hedging WITHOUT elaboration ("I dunno")
+         - Balancing rules: elaboration outweighs hedging
+         - History window: 5 turns (increased from 3)
          │
          └──► {"level": "high" | "medium" | "low", "reason": str}
 ```
