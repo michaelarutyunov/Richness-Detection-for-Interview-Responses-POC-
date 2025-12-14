@@ -39,12 +39,29 @@ schema:
       description: "The practical progress the consumer is trying to make (what they are trying to get done)."
       is_terminal: false
       llm_prompt: |
-        The practical progress the user wants to achieve that solves a struggle.
-        This is NOT the feature or solution, but the job itself.
-        Examples: 'create a satisfying coffee texture', 'maintain consistent flavor', 'prepare coffee quickly', 'avoid mess'
+        The practical progress the user is trying to make. The JOB to be done.
+
+        **Functional jobs describe WHAT THE USER IS TRYING TO ACCOMPLISH:**
+        - Task completion: 'create a satisfying coffee texture', 'prepare coffee quickly'
+        - Maintain state: 'maintain consistent flavor', 'keep coffee hot'
+        - Avoid problems: 'avoid mess', 'prevent waste', 'reduce cleanup time'
+        - Achieve result: 'get energy boost', 'wake up properly'
+
+        **Critical distinction:**
+        - Functional job = THE ACTION/PROGRESS user seeks (e.g., "create satisfying texture")
+        - Solution attribute = THE FEATURE that enables it (e.g., "enzyme process")
+        - Desired outcome = THE SUCCESS CRITERIA (e.g., "stable foam for 2 minutes")
+
+        **Decision test:** Does this describe what the user is TRYING TO DO?
+        - YES = functional_job
+        - NO, it's a product feature = solution_attribute
+        - NO, it's how user measures success = desired_outcome
+        - NO, it's about feelings/identity = emotional_job or social_job
       examples:
         - "create satisfying coffee texture"
         - "maintain consistent flavor"
+        - "prepare coffee quickly"
+        - "avoid mess"
 
     emotional_job:
       name: "emotional_job"
@@ -75,24 +92,61 @@ schema:
       description: "Success criteria or measures of progress—what 'good enough' looks like."
       is_terminal: false
       llm_prompt: |
-        Clear, measurable criteria for 'progress achieved'.
-        Examples: 'stable foam for 2 minutes', 'consistent creaminess every morning', 'no separation in coffee', 'predictable taste'
-        NOT: jobs or struggles.
+        Clear, measurable criteria for 'progress achieved'. HOW the user knows the job is done successfully.
+
+        **Desired outcomes are OBSERVABLE SUCCESS CRITERIA:**
+        - Measurable states: 'stable foam for 2 minutes', 'no separation in coffee'
+        - Consistency: 'consistent creaminess every morning', 'predictable taste'
+        - Quality thresholds: 'rich enough flavor', 'acceptable sweetness level'
+        - Absence of problems: 'no mess', 'no waste', 'no aftertaste'
+
+        **Critical distinction:**
+        - Desired outcome = HOW USER MEASURES SUCCESS (e.g., "stable foam for 2 minutes")
+        - Functional job = WHAT USER IS TRYING TO DO (e.g., "create satisfying texture")
+        - Solution attribute = PRODUCT FEATURE (e.g., "barista formula")
+
+        **Examples of job → desired outcome:**
+        - "create satisfying texture" (job) → "stable foam for 2 minutes" (outcome)
+        - "avoid mess" (job) → "no spills" (outcome)
+        - "maintain flavor" (job) → "consistent taste every time" (outcome)
+
+        **Decision test:** Does this describe a MEASURABLE result that indicates success?
+        - YES = desired_outcome
+        - NO, it's what user is trying to do = functional_job
+        - NO, it's a product feature = solution_attribute
       examples:
-        - "stable foam"
+        - "stable foam for 2 minutes"
         - "consistent creaminess"
+        - "no separation in coffee"
+        - "predictable taste"
 
     solution_attribute:
       name: "solution_attribute"
       description: "Solution mechanism, ingredient, feature, or technology the respondent mentions as relevant."
       is_terminal: false
       llm_prompt: |
-        Specific features, mechanisms, or product attributes mentioned as enablers.
-        Examples: 'enzyme process', 'Scandinavian oats', 'no thickeners', 'higher protein formula'
-        NOT: desired outcomes (those are effects, not attributes).
+        Specific features, mechanisms, ingredients, or product characteristics mentioned as enablers.
+
+        **Solution attributes are OBSERVABLE PRODUCT FEATURES:**
+        - Ingredients: 'Scandinavian oats', 'enzyme process', 'higher protein formula', 'no thickeners'
+        - Technologies: 'barista formula', 'special fermentation', 'proprietary blend'
+        - Physical properties: 'thick texture', 'creamy consistency', 'stable foam'
+        - Features: 'convenient packaging', 'resealable cap', 'single-serve portions'
+
+        **NOT solution attributes (these are outcomes/jobs):**
+        - Desired outcomes: "stable foam for 2 minutes" (this is an outcome, not a feature)
+        - Performance: "easy to mix" (this is what it does, not what it is)
+        - Jobs: "create satisfying texture" (this is the job, not the solution)
+
+        **Decision test:** Is this something the product HAS or IS?
+        - YES = solution_attribute (e.g., "enzyme process")
+        - NO, it's what the product ACHIEVES = desired_outcome
+        - NO, it's what the USER WANTS TO DO = functional_job
       examples:
         - "enzyme process"
         - "no thickeners"
+        - "Scandinavian oats"
+        - "barista formula"
 
     constraint:
       name: "constraint"

@@ -19,7 +19,7 @@
 
 This is a **graph-driven adaptive interview system** for FMCG (Fast-Moving Consumer Goods) concept testing. Unlike traditional scripted interviews, it builds a dynamic knowledge graph during natural conversations, adapting questions based on emerging structure and respondent engagement.
 
-**Key Metrics**: 6,609 lines of code across 17 Python modules.
+**Key Metrics**: ~7,500 lines of code across 17 Python modules (controller.py + 4 core + 3 decision + 1 generation + 3 utils + 1 ui + 4 config modules).
 
 ### Core Value Proposition
 
@@ -112,6 +112,8 @@ Scorers adapt to different interview methodologies without code changes:
 | **GraphState** | Computed topology snapshot | Identifies isolated, ambiguous, terminal, unexplored nodes |
 | **CoverageState** | Element tracking | Maps stimulus elements to nodes, tracks gaps |
 | **Momentum** | Engagement tracking | Monitors respondent energy, detects fatigue |
+| **NodeFocusTracker** | Loop prevention | Tracks consecutive node focuses, prevents stuck loops |
+| **EdgeFocusTracker** | Invalid edge prevention | Tracks edge focus attempts, prevents repeated invalid edge loops |
 
 ### Decision Module (Strategy Logic)
 
@@ -144,9 +146,9 @@ Scorers adapt to different interview methodologies without code changes:
 
 | Component | Responsibility | Key Operations |
 |-----------|---------------|----------------|
-| **LLMManager** | Provider abstraction | complete(), get_provider_for_task() |
-| **InterviewLogger** | Session tracking | log_turn(), get_session_summary() |
-| **ConceptParser** | Stimulus text parsing | parse_concept() |
+| **LLMManager** | Provider abstraction with timeout enforcement | complete(), get_provider_for_task(), _call_with_timeout() |
+| **InterviewLogger** | Session tracking with extended metrics | log_turn(), session_summary_extended(), strategy_reasoning() |
+| **ConceptParser** | Stimulus parsing with element classification | parse_file(), parse_text(), get_element_config() |
 
 ---
 
@@ -1170,6 +1172,20 @@ class LLMManager:
 
 **Impact**: `VerticalLadderingScorer` and `ReflectionModeScorer` now detect terminal nodes using schema rather than MEC-specific hardcoded lists.
 
+### 16. Why Structured Concept Parsing with Element Classification?
+
+**Decision**: Use ConceptParser to classify concept elements into Insight/Promise/RTB with type subcategories using LLM-based parsing.
+
+**Rationale**:
+- **Structured Coverage**: Elements classified as insight (problem, tension, frustration, unmet_need), promise (solution, benefit, outcome), or RTB (evidence, feature, mechanism, proof)
+- **Automated Configuration**: Automatically generates CoverageState requirements based on element relationships
+- **Semantic Understanding**: LLM parsing captures nuanced element types rather than simple string matching
+- **Fallback Strategy**: Heuristic parsing available when LLM unavailable
+
+**Tradeoff**: Additional LLM call for concept parsing (one-time cost) vs. manual element configuration.
+
+**Impact**: Enables automatic coverage gap detection for insight-promise-RTB chains, ensures comprehensive concept exploration.
+
 ---
 
 ## Complexity Hotspots
@@ -1528,6 +1544,67 @@ Turn 6: Focus element A (count A=3, exhausted)
 **Current Mitigation**:
 - Once exhausted, stays exhausted (permanent)
 - Exhaustion is absolute, not just consecutive
+
+### 8. Focus Trackers (Loop Prevention)
+**Location**: [src/core/state.py](src/core/state.py) (NodeFocusTracker, EdgeFocusTracker)
+
+**Why Complex**:
+- Prevents interview from getting stuck in loops when LLM repeatedly selects same focus target
+- Two tracker types: NodeFocusTracker (for node drilling) and EdgeFocusTracker (for invalid edge attempts)
+- Must balance between persistence (allowing legitimate multi-turn exploration) and loop prevention
+
+**NodeFocusTracker Implementation**:
+```python
+class NodeFocusTracker(BaseModel):
+    focus_history: List[str] = Field(default_factory=list)  # Recent node IDs
+    max_consecutive_same: int = Field(default=3)
+
+    def record_focus(self, node_id: str) -> None:
+        self.focus_history.append(node_id)
+        if len(self.focus_history) > 10:
+            self.focus_history = self.focus_history[-10:]
+
+    def is_stuck_on_node(self, node_id: str) -> bool:
+        """Check if last N focuses were all on same node."""
+        if len(self.focus_history) < self.max_consecutive_same:
+            return False
+        recent = self.focus_history[-self.max_consecutive_same:]
+        return all(nid == node_id for nid in recent)
+```
+
+**EdgeFocusTracker Implementation**:
+```python
+class EdgeFocusTracker(BaseModel):
+    edge_attempts: Dict[str, int] = Field(default_factory=dict)
+    max_attempts_per_edge: int = Field(default=2)
+
+    def record_attempt(self, source_id: str, target_id: str) -> None:
+        edge_key = f"{source_id}→{target_id}"
+        self.edge_attempts[edge_key] = self.edge_attempts.get(edge_key, 0) + 1
+
+    def should_skip_edge(self, source_id: str, target_id: str) -> bool:
+        """Check if this edge has been attempted too many times."""
+        edge_key = f"{source_id}→{target_id}"
+        return self.edge_attempts.get(edge_key, 0) >= self.max_attempts_per_edge
+```
+
+**Usage in InterviewController**:
+- NodeFocusTracker prevents strategies from repeatedly focusing on same node (e.g., connect_isolate stuck on same isolated node)
+- EdgeFocusTracker prevents resolve_schema_tension from attempting same invalid edge repeatedly
+- Trackers consulted during strategy selection to filter out stuck options
+
+**Risk**:
+- Too aggressive: May prevent legitimate deep exploration of important topics
+- Too permissive: May waste turns on unproductive loops
+
+**Current Thresholds**:
+- Node focus: 3 consecutive (allows moderate exploration)
+- Edge attempts: 2 total (prevents repeated invalid edge validation)
+
+**Mitigation**:
+- Thresholds configurable via BaseModel fields
+- History window limited to prevent unbounded memory growth
+- Trackers reset between interview sessions
 
 ---
 

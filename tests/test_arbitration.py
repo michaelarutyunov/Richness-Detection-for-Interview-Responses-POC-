@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from core.graph import Graph, Node, Edge
+from core.schema import Schema, NodeTypeDefinition
 from core.state import (
     GraphState,
     CoverageState,
@@ -40,6 +41,43 @@ from decision.arbitration import (
 
 
 # --- Fixtures ---
+
+@pytest.fixture
+def sample_schema():
+    """Create a simple test schema with MEC-like node types."""
+    return Schema(
+        name="test_mec",
+        description="Test Means-End Chain schema",
+        node_types={
+            "attribute": NodeTypeDefinition(
+                name="attribute",
+                description="Concrete product features",
+                is_terminal=False
+            ),
+            "feature": NodeTypeDefinition(
+                name="feature",
+                description="Product feature",
+                is_terminal=False
+            ),
+            "functional_consequence": NodeTypeDefinition(
+                name="functional_consequence",
+                description="Direct outcomes",
+                is_terminal=False
+            ),
+            "psychosocial_consequence": NodeTypeDefinition(
+                name="psychosocial_consequence",
+                description="Personal/social meanings",
+                is_terminal=False
+            ),
+            "value": NodeTypeDefinition(
+                name="value",
+                description="End goals and core values",
+                is_terminal=True  # Terminal type
+            ),
+        },
+        edge_types={}
+    )
+
 
 @pytest.fixture
 def sample_graph():
@@ -155,7 +193,7 @@ def sample_momentum():
 
 
 @pytest.fixture
-def sample_context(sample_graph, sample_graph_state, sample_coverage_state, sample_momentum, sample_history):
+def sample_context(sample_graph, sample_graph_state, sample_coverage_state, sample_momentum, sample_history, sample_schema):
     """Create full scoring context."""
     return ScoringContext(
         graph=sample_graph,
@@ -163,7 +201,8 @@ def sample_context(sample_graph, sample_graph_state, sample_coverage_state, samp
         coverage_state=sample_coverage_state,
         momentum=sample_momentum,
         history=sample_history,
-        recent_questions=sample_history.get_recent_questions(6)
+        recent_questions=sample_history.get_recent_questions(6),
+        schema=sample_schema
     )
 
 
@@ -777,15 +816,15 @@ class TestBranchHealthScorerEnhancements:
 class TestVerticalLadderingScorerEnhancements:
     """Tests for VerticalLadderingScorer new behaviors: value proximity detection."""
 
-    def test_value_closure_boost_for_high_abstraction(self, sample_context):
-        """Should boost deepen_branch when focus node is high abstraction type."""
-        scorer = VerticalLadderingScorer(value_closure_boost=2.0)
+    def test_value_closure_boost_for_terminal_type(self, sample_context):
+        """Should boost deepen_branch when focus node is a terminal type (schema-agnostic)."""
+        scorer = VerticalLadderingScorer(terminal_closure_boost=2.0)
 
-        # Add a value-type node
+        # Add a terminal-type node (value is terminal in MEC schema)
         value_node = Node(
             id="value_node",
             label="feeling accomplished",
-            node_type="psychosocial_consequence",
+            node_type="value",  # Terminal type
             timestamp=datetime.now()
         )
         sample_context.graph.add_node(value_node)
@@ -799,13 +838,13 @@ class TestVerticalLadderingScorerEnhancements:
         focus = FocusTarget.from_node(value_node)
 
         score = scorer.score(strategy, focus, sample_context)
-        assert score == 2.0  # Value closure boost
+        assert score == 2.0  # Terminal closure boost
 
     def test_value_proximity_boost_near_value_node(self, sample_context):
         """Should boost when focus node is within N steps of value node."""
         scorer = VerticalLadderingScorer(
-            value_proximity_boost=1.8,
-            near_value_depth=2
+            terminal_proximity_boost=1.8,
+            near_terminal_depth=2
         )
 
         # Create a chain: concrete -> intermediate -> value

@@ -5,7 +5,7 @@ This is the NEW Gradio interface for the AI Interview System, built using the si
 ## Key Features
 
 - **NEW Architecture**: Uses the simplified `InterviewController` instead of the complex legacy orchestrator
-- **Unified Configuration**: Single config system with `llm_config.yaml` and `interview_config.yaml`
+- **Unified Configuration**: Single config system with `llm_config.yaml` and `interview_logic.yaml`
 - **Real-time Graph Visualization**: Node and edge tables showing the knowledge graph as it builds
 - **Multiple Input Methods**: Text concepts or load from concept files
 - **Export Functionality**: JSON (complete session data) and transcript (text format)
@@ -28,8 +28,7 @@ This is the NEW Gradio interface for the AI Interview System, built using the si
 
 1. **Configuration Files**: Ensure these files exist in `src/config/`:
    - `llm_config.yaml` - LLM provider configuration
-   - `interview_config.yaml` - Interview flow settings
-   - `interview_logic.yaml` - Strategy selection logic
+   - `interview_logic.yaml` - Interview strategies, tactics, and arbitration scoring
    - `schemas/means_end_chain.yaml` - Methodology schema
    - `concepts/*.md` - Concept files (optional)
 

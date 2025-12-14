@@ -12,28 +12,66 @@ schema:
       description: "Concrete observable product features"
       is_terminal: false
       llm_prompt: |
-        Physical characteristics or features that can be directly observed or measured.
-        Examples: 'blue color', '500ml volume', 'smooth texture', 'contains caffeine', 'made of leather', 'has touchscreen'
-        NOT: benefits, outcomes, feelings, or why it matters - only what IS observable.
+        Observable product features that can be verified WITHOUT using the product.
+
+        **Physical & Composition Attributes** (objective, measurable):
+        - Composition: contains caffeine, made of leather, organic ingredients
+        - Packaging: bottle size, shape, material, labeling
+        - Physical properties: weight, volume, temperature
+
+        **Sensory Attributes** (observable through senses):
+        - Basic appearance: color, clarity, foam presence
+        - Basic texture: observed consistency (thick vs thin)
+
+        **NOT attributes** (these require USE → they are consequences):
+        - Sensory EXPERIENCES: "creamy mouthfeel", "pleasant sensation"
+        - Performance: "easy to mix", "keeps drinks cold"
+        - Perceptual interpretations: "appears premium", "looks appetizing"
+
+        **Boundary cases** - If sensory property involves subjective interpretation,
+        classify as functional_consequence, not attribute.
       examples:
         - "blue color"
         - "500ml volume"
         - "smooth texture"
         - "contains caffeine"
+        - "thick creamy consistency"
+        - "proper foam"
 
     functional_consequence:
       name: "functional_consequence"
       description: "Direct, tangible outcomes from using the product"
       is_terminal: false
       llm_prompt: |
-        Immediate, practical results or outcomes from using a product attribute.
-        Examples: 'keeps drinks cold for 6 hours', 'charges in 30 minutes', 'fits in car cupholder', 'reduces energy bill'
-        Focus: WHAT the product does or enables (functional performance).
-        NOT: how it makes you feel or broader life impacts - stick to direct, measurable outcomes.
+        Direct result of an attribute during use. What happens BECAUSE of the attribute.
+
+        **Functional consequences describe PERFORMANCE and OUTCOMES:**
+        - Usability: "easy to mix", "hard to pour", "convenient to carry"
+        - Performance: "keeps drinks cold for 6 hours", "charges in 30 minutes", "lasts all day"
+        - Physical effects: "fills me up", "wakes me up", "quenches thirst"
+        - Fit/compatibility: "fits in car cupholder", "works with my coffee machine"
+
+        **Examples of attribute → functional consequence:**
+        - "watery texture" (attribute) → "hard to mix properly" (functional)
+        - "thin consistency" (attribute) → "gets lost in coffee" (functional)
+        - "no foam" (attribute) → "coffee looks diluted" (functional)
+        - "thick creamy texture" (attribute) → "creates satisfying mouthfeel" (functional)
+
+        **Decision test:** Does it describe an outcome or performance result from using the product?
+        - YES = functional consequence
+        - NO, it's observable without use = attribute
+        - NO, it's about feelings/identity = psychosocial consequence
+
+        **NOT functional consequences:**
+        - Sensory observations: "thick", "creamy", "foamy" (these are attributes)
+        - Feelings: "feel confident", "feel premium" (these are psychosocial)
+        - Values: "security", "freedom" (these are values)
       examples:
         - "keeps drinks cold for 6 hours"
         - "charges in 30 minutes"
         - "fits in car cupholder"
+        - "easy to mix into coffee"
+        - "creates stable foam"
 
     psychosocial_consequence:
       name: "psychosocial_consequence"
@@ -54,10 +92,22 @@ schema:
       description: "End goals and core values"
       is_terminal: true
       llm_prompt: |
-        Fundamental life goals, deeply held principles, or end-state aspirations.
-        Examples: 'security', 'family harmony', 'self-actualization', 'environmental responsibility', 'personal freedom', 'social belonging'
-        Focus: ultimate WHY - core human values that transcend specific products.
-        Must be abstract and universally meaningful - not product-specific outcomes.
+        Core personal values or life themes that matter beyond this specific product.
+
+        **Terminal values** (universally meaningful):
+        - security, freedom, belonging, achievement, harmony
+
+        **Everyday wellbeing values** (broader life themes):
+        - "starting the day right", "being productive", "feeling in control"
+        - "maintaining wellness", "enjoying small pleasures", "peace of mind"
+
+        If a psychosocial consequence relates to broader life goals or daily wellbeing,
+        promote to value with a LOWER threshold than universal ideals.
+
+        Examples:
+        - "feel confident" → psychosocial
+        - "confidence in social situations" → value (relates to belonging/social harmony)
+        - "pleasant morning routine" → value (relates to wellbeing)
       examples:
         - "security"
         - "family harmony"
@@ -129,7 +179,14 @@ schema:
     - Psychosocial consequences involve self-perception or social dynamics
     - Values are abstract end-states people pursue across life domains
 
-    When uncertain between adjacent levels, prefer the more concrete classification.
+    CLASSIFICATION PRIORITY - When uncertain between levels, choose the HIGHER level if the respondent expresses:
+    - Personal meaning or subjective interpretation
+    - Emotional reaction or feeling
+    - Social significance or identity
+
+    Choose the LOWER level only if the statement is:
+    - Purely observational without interpretation
+    - Factual description without personal meaning
 
     The goal is to build a ladder from concrete (attributes) to abstract (values),
     revealing the personal meaning structure behind product perceptions.
@@ -138,6 +195,19 @@ schema:
     - "X doesn't work, so I need Y" = CAUSAL CHAIN (leads_to), not conflict
     - conflicts_with ONLY when A and B cannot both be true/achieved
     - When in doubt between leads_to and conflicts_with, use leads_to
+
+  coverage_guidance: |
+    RTB (Reason to Believe) and Promise elements can be satisfied by ANY node type,
+    not just attributes.
+
+    Coverage is satisfied when the respondent provides ANY meaningful reaction about
+    the reference element, including:
+    - Attribute observation ("it's thick")
+    - Functional interpretation ("makes it mix better")
+    - Psychosocial reaction ("I trust natural processes")
+    - Skepticism or curiosity ("I don't know what enzymes are")
+
+    The node_type does NOT need to match the element category.
 
 # Metadata
 author: "Interview Agent Team"

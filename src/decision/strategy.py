@@ -24,6 +24,7 @@ from core.state import (
 from core.history import History
 
 if TYPE_CHECKING:
+    from core.schema import Schema
     from decision.arbitration import ArbitrationEngine, ScoringContext
 
 
@@ -403,11 +404,10 @@ class Strategy(BaseModel):
 
 class StrategySelector(BaseModel):
     """
-    Selects strategies based on current state.
+    Selects strategies based on current state using utility-based arbitration.
 
-    Supports two selection modes:
-    - Legacy: Sequential threshold check - first applicable strategy wins
-    - Arbitration: Utility-based scoring of all applicable strategies
+    Uses multi-scorer arbitration to evaluate all applicable strategies
+    and select the one with highest utility score.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -420,29 +420,23 @@ class StrategySelector(BaseModel):
         default_factory=dict,
         description="Available tactics"
     )
-    use_arbitration: bool = Field(
-        default=False,
-        description="Whether to use utility-based arbitration"
-    )
     _arbitration_engine: Optional["ArbitrationEngine"] = None
 
     def set_arbitration_engine(self, engine: "ArbitrationEngine") -> None:
-        """Set the arbitration engine and enable arbitration mode."""
+        """Set the arbitration engine (required)."""
         self._arbitration_engine = engine
-        self.use_arbitration = True
-        logger.info("[StrategySelector] Arbitration mode enabled")
+        logger.info("[StrategySelector] Arbitration engine configured")
     
     @classmethod
-    def load(cls, path: str, enable_arbitration: bool = True) -> "StrategySelector":
+    def load(cls, path: str) -> "StrategySelector":
         """
         Load strategies and tactics from interview_logic.yaml.
 
         Args:
             path: Path to interview_logic.yaml
-            enable_arbitration: Whether to enable arbitration if config found
 
         Returns:
-            Configured StrategySelector
+            Configured StrategySelector with arbitration enabled
         """
         path = Path(path)
         with open(path, 'r', encoding='utf-8') as f:
@@ -472,13 +466,15 @@ class StrategySelector(BaseModel):
 
         selector = cls(strategies=strategies, tactics=tactics)
 
-        # Load arbitration config if present and enabled
+        # Always load arbitration config (required)
         arbitration_config = data.get('arbitration', {})
-        if enable_arbitration and arbitration_config.get('enabled', False):
-            from decision.arbitration import ArbitrationEngine
-            engine = ArbitrationEngine.from_config(arbitration_config)
-            selector.set_arbitration_engine(engine)
-            logger.info("[StrategySelector] Loaded with arbitration enabled")
+        if not arbitration_config:
+            raise ValueError("[StrategySelector] Arbitration configuration required in interview_logic.yaml")
+
+        from decision.arbitration import ArbitrationEngine
+        engine = ArbitrationEngine.from_config(arbitration_config)
+        selector.set_arbitration_engine(engine)
+        logger.info("[StrategySelector] Loaded with arbitration")
 
         return selector
     
@@ -490,13 +486,11 @@ class StrategySelector(BaseModel):
         momentum: Momentum,
         node_focus_tracker: Optional[NodeFocusTracker] = None,
         edge_focus_tracker: Optional[EdgeFocusTracker] = None,
-        history: Optional[History] = None
+        history: Optional[History] = None,
+        schema: Optional["Schema"] = None
     ) -> Tuple[Strategy, FocusTarget]:
         """
-        Select best strategy and its focus.
-
-        Uses either legacy (first-applicable-wins) or arbitration mode
-        depending on configuration.
+        Select best strategy and its focus using utility-based arbitration.
 
         Args:
             graph: Current knowledge graph
@@ -505,7 +499,8 @@ class StrategySelector(BaseModel):
             momentum: Current momentum assessment
             node_focus_tracker: Optional tracker for node focus exhaustion
             edge_focus_tracker: Optional tracker for edge focus exhaustion
-            history: Optional conversation history (required for arbitration)
+            history: Conversation history (required)
+            schema: Optional schema for terminal type detection in scorers
 
         Returns:
             Tuple of (selected strategy, focus target)
@@ -531,53 +526,17 @@ class StrategySelector(BaseModel):
         if edge_focus_tracker and edge_focus_tracker.exhausted_edges:
             logger.info(f"[Strategy Input] Exhausted edges: {edge_focus_tracker.exhausted_edges}")
 
-        # Choose selection mode
-        if self.use_arbitration and self._arbitration_engine and history:
-            return self._select_arbitrated(
-                graph, graph_state, coverage_state, momentum,
-                node_focus_tracker, edge_focus_tracker, history
-            )
-        else:
-            return self._select_legacy(
-                graph, graph_state, coverage_state, momentum,
-                node_focus_tracker, edge_focus_tracker
-            )
+        # Always use arbitration
+        if not self._arbitration_engine:
+            raise ValueError("[StrategySelector] Arbitration engine not configured")
+        if not history:
+            raise ValueError("[StrategySelector] History required for arbitration")
 
-    def _select_legacy(
-        self,
-        graph: Graph,
-        graph_state: GraphState,
-        coverage_state: CoverageState,
-        momentum: Momentum,
-        node_focus_tracker: Optional[NodeFocusTracker] = None,
-        edge_focus_tracker: Optional[EdgeFocusTracker] = None
-    ) -> Tuple[Strategy, FocusTarget]:
-        """
-        Legacy selection: first applicable strategy wins.
-        """
-        for strategy in self.strategies:
-            applies = strategy.applies(graph_state, coverage_state, momentum)
-            if applies:
-                focus = strategy.get_focus(graph, graph_state, coverage_state, node_focus_tracker, edge_focus_tracker)
-                # Skip if focus is empty due to exhaustion
-                if not focus.node and not focus.element and not focus.node_pair and not focus.coverage_gap:
-                    logger.info(f"[Strategy Skip] {strategy.id}: all targets exhausted")
-                    continue
-                logger.info(f"[Strategy Selected] {strategy.id} -> {focus.describe()}")
-                return strategy, focus
-            else:
-                logger.debug(f"[Strategy Skip] {strategy.id}: conditions not met")
+        return self._select_arbitrated(
+            graph, graph_state, coverage_state, momentum,
+            node_focus_tracker, edge_focus_tracker, history, schema
+        )
 
-        # Fallback - should not reach here if introduce_seed is last
-        if self.strategies:
-            fallback = self.strategies[-1]
-            focus = fallback.get_focus(graph, graph_state, coverage_state)
-            logger.warning(f"[Strategy Fallback] Using {fallback.id}")
-            return fallback, focus
-
-        # Emergency fallback
-        logger.error("[Strategy] No strategies available - using emergency fallback")
-        return Strategy(id="fallback", intent="Continue conversation", applies_when="always"), FocusTarget()
 
     def _select_arbitrated(
         self,
@@ -587,7 +546,8 @@ class StrategySelector(BaseModel):
         momentum: Momentum,
         node_focus_tracker: Optional[NodeFocusTracker],
         edge_focus_tracker: Optional[EdgeFocusTracker],
-        history: History
+        history: History,
+        schema: Optional["Schema"] = None
     ) -> Tuple[Strategy, FocusTarget]:
         """
         Arbitrated selection: score all applicable strategies and pick best.
@@ -604,17 +564,17 @@ class StrategySelector(BaseModel):
                 )
                 # Skip if focus is empty
                 if not focus.node and not focus.element and not focus.node_pair and not focus.coverage_gap:
-                    logger.debug(f"[Arbitration] Skipping {strategy.id}: all targets exhausted")
+                    logger.info(f"[Arbitration] Skipping {strategy.id}: all targets exhausted")
                     continue
                 candidates.append((strategy, focus))
-                logger.debug(f"[Arbitration] Candidate: {strategy.id} -> {focus.describe()}")
+                logger.info(f"[Arbitration] Candidate: {strategy.id} -> {focus.describe()}")
 
-        # If no candidates, fall back to legacy selection
+        # If no candidates, raise error
         if not candidates:
-            logger.warning("[Arbitration] No valid candidates - falling back to legacy selection")
-            return self._select_legacy(
-                graph, graph_state, coverage_state, momentum,
-                node_focus_tracker, edge_focus_tracker
+            logger.error("[Arbitration] No valid candidates found")
+            raise ValueError(
+                "[StrategySelector] No valid strategy candidates available. "
+                "All strategies either don't apply or have exhausted targets."
             )
 
         # Build scoring context
@@ -624,6 +584,7 @@ class StrategySelector(BaseModel):
             coverage_state=coverage_state,
             momentum=momentum,
             history=history,
+            schema=schema,
             node_focus_tracker=node_focus_tracker,
             edge_focus_tracker=edge_focus_tracker
         )

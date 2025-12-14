@@ -29,6 +29,10 @@ dependencies = [
     # Utilities
     "python-dateutil>=2.8.2",
 
+    # Semantic Deduplication
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+
     # Optional: Visualization
     "matplotlib>=3.8.2",
     "plotly>=5.18.0",
@@ -38,6 +42,7 @@ dependencies = [
 dev = [
     "pytest>=7.4.3",
     "pytest-asyncio>=0.21.1",
+    "respx>=0.21.0",
     "black>=23.12.1",
     "ruff>=0.1.11",
     "ipython>=8.18.0",
@@ -91,4 +96,6 @@ dev = [
     "respx>=0.21.0",
     "black>=23.12.1",
     "ruff>=0.1.11",
+    "ipython>=8.18.0",
+    "jupyter>=1.0.0",
 ]

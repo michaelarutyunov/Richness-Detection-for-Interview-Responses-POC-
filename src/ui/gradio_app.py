@@ -14,6 +14,8 @@ from typing import Optional, Dict, Any, List, Tuple
 
 import gradio as gr
 from dotenv import load_dotenv
+import networkx as nx
+import plotly.graph_objects as go
 
 # Import NEW system components
 from controller import InterviewController
@@ -147,7 +149,7 @@ class InterviewUI:
 
     async def start_interview_with_concept(
         self, concept_text: str, selected_concept_file: Optional[str] = None, selected_schema: Optional[str] = None
-    ) -> Tuple[List[Dict], Dict, str, str, List[List], List[List], Dict]:
+    ) -> Tuple[List[Dict], Dict, str, str, List[List], List[List], go.Figure, Dict]:
         """Start new interview with concept description or file."""
         if not concept_text.strip() and not selected_concept_file:
             error_msg = [{"role": "assistant", "content": "Please provide a concept description or select a concept file."}]
@@ -158,6 +160,7 @@ class InterviewUI:
                 "No concept provided",
                 [],
                 [],
+                self._create_plotly_graph(Graph()),
                 {"error": "No concept provided"}
             )
 
@@ -231,9 +234,12 @@ class InterviewUI:
             
             # Get initial graph data for tables
             nodes_data, edges_data = self._get_graph_table_data(controller.graph)
-            
+
+            # Create initial graph visualization
+            graph_plot = self._create_plotly_graph(controller.graph)
+
             logger.info(f"Interview started: {self.current_session_id} for concept: {concept_name}")
-            
+
             return (
                 history,
                 stats,
@@ -241,6 +247,7 @@ class InterviewUI:
                 concept_description,
                 nodes_data,
                 edges_data,
+                graph_plot,
                 {"status": "started", "concept": concept_name}
             )
             
@@ -254,12 +261,13 @@ class InterviewUI:
                 "Error occurred",
                 [],
                 [],
+                self._create_plotly_graph(Graph()),
                 {"error": str(e)}
             )
 
     async def process_response(
         self, user_response: str, history: List[Dict]
-    ) -> Tuple[List[Dict], str, Dict, str, List[List], List[List], Dict]:
+    ) -> Tuple[List[Dict], str, Dict, str, List[List], List[List], go.Figure, Dict]:
         """Process participant response and generate next question."""
         if not self.current_controller:
             return (
@@ -269,6 +277,7 @@ class InterviewUI:
                 "No active session",
                 [],
                 [],
+                self._create_plotly_graph(Graph()),
                 {"error": "No active session"}
             )
 
@@ -280,6 +289,7 @@ class InterviewUI:
                 self.current_session_id or "Not started",
                 [],
                 [],
+                self._create_plotly_graph(Graph()),
                 {"error": "No response provided"}
             )
 
@@ -303,9 +313,12 @@ class InterviewUI:
             
             # Get updated graph data for tables
             nodes_data, edges_data = self._get_graph_table_data(self.current_controller.graph)
-            
+
+            # Create updated graph visualization
+            graph_plot = self._create_plotly_graph(self.current_controller.graph)
+
             logger.info(f"Processed turn {self.current_controller.state.turn_count}")
-            
+
             return (
                 history,
                 "",
@@ -313,6 +326,7 @@ class InterviewUI:
                 self.current_session_id or "Active",
                 nodes_data,
                 edges_data,
+                graph_plot,
                 {"status": "processed", "turn": self.current_controller.state.turn_count}
             )
             
@@ -321,7 +335,7 @@ class InterviewUI:
             error_msg = f"Sorry, I encountered an error: {str(e)}"
             history.append({"role": "user", "content": user_response})
             history.append({"role": "assistant", "content": error_msg})
-            
+
             return (
                 history,
                 "",
@@ -329,6 +343,7 @@ class InterviewUI:
                 self.current_session_id or "Error",
                 [],
                 [],
+                self._create_plotly_graph(Graph()),
                 {"error": str(e)}
             )
 
@@ -368,6 +383,185 @@ class InterviewUI:
             ])
         
         return nodes_data, edges_data
+
+    def _create_plotly_graph(self, graph: Graph) -> go.Figure:
+        """Create an interactive Plotly visualization of the knowledge graph."""
+        if not graph or len(graph.nodes) == 0:
+            # Return empty figure with message
+            fig = go.Figure()
+            fig.add_annotation(
+                text="No graph data yet. Start an interview to see the knowledge graph grow!",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16, color="gray")
+            )
+            fig.update_layout(
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor="white",
+                height=600
+            )
+            return fig
+
+        # Convert Graph to NetworkX
+        G = nx.DiGraph()
+
+        # Add nodes with attributes
+        for node in graph.nodes.values():
+            G.add_node(
+                node.id,
+                label=node.label,
+                node_type=node.node_type or "untyped",
+                is_ambiguous=node.is_ambiguous,
+                timestamp=node.timestamp
+            )
+
+        # Add edges
+        for edge in graph.edges.values():
+            G.add_edge(
+                edge.source_id,
+                edge.target_id,
+                relation_type=edge.relation_type
+            )
+
+        # Calculate layout using spring layout
+        try:
+            pos = nx.spring_layout(G, k=1.5, iterations=50, seed=42)
+        except:
+            # Fallback to simple circular layout if spring fails
+            pos = nx.circular_layout(G)
+
+        # Get node types for color mapping
+        node_types = set(data.get('node_type', 'untyped') for _, data in G.nodes(data=True))
+        color_palette = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+        ]
+        type_to_color = {t: color_palette[i % len(color_palette)] for i, t in enumerate(sorted(node_types))}
+
+        # Create edge traces
+        edge_traces = []
+        for edge in G.edges(data=True):
+            source_id, target_id, edge_data = edge
+            x0, y0 = pos[source_id]
+            x1, y1 = pos[target_id]
+
+            # Create edge line
+            edge_trace = go.Scatter(
+                x=[x0, x1, None],
+                y=[y0, y1, None],
+                mode='lines',
+                line=dict(width=1.5, color='#888'),
+                hoverinfo='text',
+                text=f"{edge_data.get('relation_type', 'related')}",
+                showlegend=False
+            )
+            edge_traces.append(edge_trace)
+
+            # Add arrow annotation
+            # Calculate arrow position (90% along the edge)
+            arrow_x = x0 + 0.9 * (x1 - x0)
+            arrow_y = y0 + 0.9 * (y1 - y0)
+
+        # Create node trace
+        node_x = []
+        node_y = []
+        node_colors = []
+        node_text = []
+        node_sizes = []
+        node_border_colors = []
+        node_border_widths = []
+
+        for node_id in G.nodes():
+            x, y = pos[node_id]
+            node_x.append(x)
+            node_y.append(y)
+
+            node_data = G.nodes[node_id]
+            node_type = node_data.get('node_type', 'untyped')
+            node_colors.append(type_to_color[node_type])
+
+            # Node size based on degree (connections)
+            degree = G.degree(node_id)
+            node_sizes.append(20 + degree * 5)
+
+            # Hover text
+            label = node_data.get('label', node_id)
+            connections = G.degree(node_id)
+            hover_text = f"<b>{label}</b><br>"
+            hover_text += f"Type: {node_type}<br>"
+            hover_text += f"Connections: {connections}"
+            if node_data.get('is_ambiguous'):
+                hover_text += "<br><i>⚠️ Ambiguous</i>"
+            node_text.append(hover_text)
+
+            # Border for ambiguous nodes
+            if node_data.get('is_ambiguous'):
+                node_border_colors.append('red')
+                node_border_widths.append(3)
+            else:
+                node_border_colors.append('#888')
+                node_border_widths.append(1)
+
+        node_trace = go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode='markers+text',
+            hoverinfo='text',
+            text=[G.nodes[n].get('label', n)[:15] for n in G.nodes()],
+            textposition="top center",
+            textfont=dict(size=9),
+            hovertext=node_text,
+            marker=dict(
+                size=node_sizes,
+                color=node_colors,
+                line=dict(
+                    color=node_border_colors,
+                    width=node_border_widths
+                )
+            ),
+            showlegend=False
+        )
+
+        # Create figure
+        fig = go.Figure(data=edge_traces + [node_trace])
+
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text=f"Knowledge Graph ({len(G.nodes)} nodes, {len(G.edges)} edges)",
+                x=0.5,
+                xanchor='center'
+            ),
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor='white',
+            height=600,
+            dragmode='pan'
+        )
+
+        # Add legend manually for node types
+        legend_text = "<b>Node Types:</b><br>"
+        for node_type in sorted(type_to_color.keys()):
+            color = type_to_color[node_type]
+            legend_text += f"<span style='color:{color}'>⬤</span> {node_type}<br>"
+
+        fig.add_annotation(
+            text=legend_text,
+            xref="paper", yref="paper",
+            x=1.02, y=0.98,
+            xanchor='left', yanchor='top',
+            showarrow=False,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="#888",
+            borderwidth=1,
+            font=dict(size=10)
+        )
+
+        return fig
 
     async def export_json_file(self) -> Optional[str]:
         """Export complete session data as JSON."""
@@ -477,6 +671,36 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
 
         except Exception as e:
             logger.error(f"Transcript export failed: {e}")
+            return None
+
+    async def export_visualization_html(self) -> Optional[str]:
+        """Export graph visualization as interactive HTML file."""
+        try:
+            if not self.current_controller or not self.current_session_id:
+                logger.warning("Visualization export attempted with no active session")
+                return None
+
+            logger.info(f"Exporting visualization for session {self.current_session_id}")
+
+            import tempfile
+
+            # Create the plotly figure
+            fig = self._create_plotly_graph(self.current_controller.graph)
+
+            # Write to temporary HTML file
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix="_graph_viz.html",
+                delete=False,
+                prefix=f"viz_{self.current_session_id}_",
+            ) as temp_file:
+                fig.write_html(temp_file.name)
+
+            logger.info(f"Visualization export successful: {temp_file.name}")
+            return temp_file.name
+
+        except Exception as e:
+            logger.error(f"Visualization export failed: {e}")
             return None
 
     async def export_graph_data_json(self) -> Optional[str]:
@@ -728,6 +952,48 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
 
         return nodes_table, edges_table, download_graph_btn, graph_data_file, graph_summary
 
+    def _build_visualization_tab(self) -> Tuple:
+        """Build interactive graph visualization tab."""
+        with gr.TabItem("🔍 Graph Visualization"):
+            gr.Markdown("### Interactive Knowledge Graph")
+            gr.Markdown("Explore the interview knowledge graph with interactive visualization. Pan, zoom, and hover over nodes to see details.")
+
+            # Main visualization
+            graph_plot = gr.Plot(
+                label="Knowledge Graph Visualization",
+                value=self._create_plotly_graph(Graph())  # Start with empty graph
+            )
+
+            with gr.Row():
+                refresh_viz_btn = gr.Button("🔄 Refresh Visualization", size="sm")
+                download_viz_btn = gr.Button("📥 Download as HTML", size="sm")
+                viz_file = gr.File(
+                    label="Visualization File",
+                    visible=True
+                )
+
+            # Info panel
+            with gr.Accordion("ℹ️ Visualization Guide", open=False):
+                gr.Markdown(
+                    """
+                    **How to use the visualization:**
+                    - **Pan**: Click and drag to move around
+                    - **Zoom**: Scroll to zoom in/out
+                    - **Hover**: Move cursor over nodes to see details
+                    - **Node Size**: Larger nodes have more connections
+                    - **Node Color**: Different colors represent different node types
+                    - **Red Border**: Indicates ambiguous nodes that need clarification
+
+                    **Understanding the graph:**
+                    - Nodes represent concepts mentioned in the interview
+                    - Edges (lines) show relationships between concepts
+                    - The layout uses force-directed positioning for natural clustering
+                    - Hover over edges to see the relationship type
+                    """
+                )
+
+        return graph_plot, refresh_viz_btn, download_viz_btn, viz_file
+
     def _build_export_tab(self) -> Tuple:
         """Build export tab."""
         with gr.TabItem("💾 Export"):
@@ -789,6 +1055,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
         concept_input, concept_file_dropdown, schema_dropdown, user_input, chatbot,
         session_id_display, graph_stats, concept_display, status_text,
         nodes_table, edges_table, graph_data_file, graph_summary,
+        graph_plot, refresh_viz_btn, download_viz_btn, viz_file,
         json_file, transcript_file
     ):
         """Wire all event handlers to UI components."""
@@ -804,6 +1071,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 concept_display,
                 nodes_table,
                 edges_table,
+                graph_plot,
                 status_text
             ],
         )
@@ -819,6 +1087,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 session_id_display,
                 nodes_table,
                 edges_table,
+                graph_plot,
                 status_text
             ],
         )
@@ -834,6 +1103,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 session_id_display,
                 nodes_table,
                 edges_table,
+                graph_plot,
                 status_text
             ],
         )
@@ -848,15 +1118,28 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 "No concept loaded",  # concept_display
                 [],  # nodes_table
                 [],  # edges_table
+                self._create_plotly_graph(Graph()),  # graph_plot
                 "Ready to start"  # status_text
             ),
-            outputs=[chatbot, user_input, graph_stats, session_id_display, concept_display, nodes_table, edges_table, status_text],
+            outputs=[chatbot, user_input, graph_stats, session_id_display, concept_display, nodes_table, edges_table, graph_plot, status_text],
         )
 
         # Download graph data
         download_graph_btn.click(
             fn=self.export_graph_data_json,
             outputs=[graph_data_file]
+        )
+
+        # Refresh visualization
+        refresh_viz_btn.click(
+            fn=lambda: self._create_plotly_graph(self.current_controller.graph if self.current_controller else Graph()),
+            outputs=[graph_plot]
+        )
+
+        # Download visualization as HTML
+        download_viz_btn.click(
+            fn=self.export_visualization_html,
+            outputs=[viz_file]
         )
 
         # Export handlers
@@ -885,6 +1168,9 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 # Graph tab
                 nodes_table, edges_table, download_graph_btn, graph_data_file, graph_summary = self._build_graph_tab()
 
+                # Visualization tab
+                graph_plot, refresh_viz_btn, download_viz_btn, viz_file = self._build_visualization_tab()
+
                 # Export tab
                 export_json_btn, json_file, export_transcript_btn, transcript_file = self._build_export_tab()
 
@@ -895,6 +1181,7 @@ Coverage Gaps: {len(self.current_controller.coverage_state.get_gaps())}
                 concept_input, concept_file_dropdown, schema_dropdown, user_input, chatbot,
                 session_id_display, graph_stats, concept_display, status_text,
                 nodes_table, edges_table, graph_data_file, graph_summary,
+                graph_plot, refresh_viz_btn, download_viz_btn, viz_file,
                 json_file, transcript_file
             )
 

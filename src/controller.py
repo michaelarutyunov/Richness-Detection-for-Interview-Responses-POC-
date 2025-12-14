@@ -183,7 +183,12 @@ class InterviewController:
         
         logger.info(f"Loading interview logic from {logic_path}")
         strategy_selector = StrategySelector.load(logic_path)
-        
+
+        # Load config for extraction (read from same YAML file)
+        import yaml
+        with open(logic_path, 'r', encoding='utf-8') as f:
+            interview_config = yaml.safe_load(f)
+
         logger.info(f"Loading LLM config from {llm_config_path}")
         llm_manager = LLMManager.from_config_file(llm_config_path)
         llm_manager.log_health_check()
@@ -208,9 +213,9 @@ class InterviewController:
                 content_preview = elem.content[:100] + "..." if len(elem.content) > 100 else elem.content
                 logger.info(f"  - {elem_id}: {content_preview}")
         logger.info("=" * 60)
-        
+
         # Create components
-        extractor = Extractor(schema, coverage_state, llm_manager)
+        extractor = Extractor(schema, coverage_state, llm_manager, config=interview_config)
         generator = QuestionGenerator(llm_manager, strategy_selector)
         
         # Create config

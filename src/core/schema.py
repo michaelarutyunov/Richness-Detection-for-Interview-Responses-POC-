@@ -75,18 +75,18 @@ class Schema(BaseModel):
     def load(cls, path: str) -> "Schema":
         """
         Load schema from YAML file.
-        
+
         Args:
             path: Path to schema YAML file
-            
+
         Returns:
             Loaded Schema instance
         """
-        path = Path(path)
-        if not path.exists():
+        path_obj = Path(path)
+        if not path_obj.exists():
             raise FileNotFoundError(f"Schema file not found: {path}")
-        
-        with open(path, 'r', encoding='utf-8') as f:
+
+        with open(path_obj, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
         
         # Handle nested 'schema' key if present
@@ -135,7 +135,7 @@ class Schema(BaseModel):
                 )
         
         return cls(
-            name=schema_data.get('name', path.stem),
+            name=schema_data.get('name', path_obj.stem),
             description=schema_data.get('description', ''),
             version=schema_data.get('version', '1.0.0'),
             node_types=node_types,

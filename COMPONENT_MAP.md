@@ -546,9 +546,111 @@ def is_fatigued(self) -> bool:
 
 ---
 
+### 9. NodeFocusTracker ([src/core/state.py](src/core/state.py))
+
+**Purpose**: Prevent interview from getting stuck in loops by tracking consecutive node focuses.
+
+**Responsibilities**:
+- Track recent node focus history
+- Detect when interview is stuck on same node
+- Prevent strategies from repeatedly selecting same focus target
+
+**Dependencies**: None (standalone dataclass)
+
+**Dependents**:
+- `InterviewController` (uses to filter stuck options during strategy selection)
+- `StrategySelector` (indirectly through filtered candidate strategies)
+
+**Structure**:
+```python
+class NodeFocusTracker(BaseModel):
+    focus_history: List[str] = Field(default_factory=list)  # Recent node IDs
+    max_consecutive_same: int = Field(default=3)
+```
+
+**Key Methods**:
+
+| Method | Purpose |
+|--------|---------|
+| `record_focus(node_id)` | Record focus on a node, maintain sliding window |
+| `is_stuck_on_node(node_id)` | Check if last N focuses were all on same node |
+| `reset()` | Clear focus history |
+
+**Stuck Detection Logic**:
+```python
+def is_stuck_on_node(self, node_id: str) -> bool:
+    """Check if last N focuses were all on same node."""
+    if len(self.focus_history) < self.max_consecutive_same:
+        return False
+    recent = self.focus_history[-self.max_consecutive_same:]
+    return all(nid == node_id for nid in recent)
+```
+
+**Usage Pattern**:
+- Before selecting strategy focus, controller checks `is_stuck_on_node(candidate_node_id)`
+- If stuck, filter out strategies that would focus on that node again
+- Forces interview to move to different focus target
+
+**Critical Invariants**:
+1. History window limited to 10 recent focuses (prevents unbounded growth)
+2. Threshold configurable (default: 3 consecutive)
+3. Reset between interview sessions
+
+---
+
+### 10. EdgeFocusTracker ([src/core/state.py](src/core/state.py))
+
+**Purpose**: Prevent repeated attempts to validate same invalid edge.
+
+**Responsibilities**:
+- Track edge validation attempts
+- Detect when same edge has been attempted too many times
+- Prevent resolve_schema_tension from looping on invalid edges
+
+**Dependencies**: None (standalone dataclass)
+
+**Dependents**:
+- `InterviewController` (uses to filter invalid edge targets)
+- `resolve_schema_tension` strategy (indirectly through filtered edges)
+
+**Structure**:
+```python
+class EdgeFocusTracker(BaseModel):
+    edge_attempts: Dict[str, int] = Field(default_factory=dict)  # edge_key → attempt_count
+    max_attempts_per_edge: int = Field(default=2)
+```
+
+**Key Methods**:
+
+| Method | Purpose |
+|--------|---------|
+| `record_attempt(source_id, target_id)` | Record edge validation attempt |
+| `should_skip_edge(source_id, target_id)` | Check if edge has been attempted too many times |
+| `reset()` | Clear attempt history |
+
+**Skip Detection Logic**:
+```python
+def should_skip_edge(self, source_id: str, target_id: str) -> bool:
+    """Check if this edge has been attempted too many times."""
+    edge_key = f"{source_id}→{target_id}"
+    return self.edge_attempts.get(edge_key, 0) >= self.max_attempts_per_edge
+```
+
+**Usage Pattern**:
+- Before attempting to resolve schema tension on an edge, check `should_skip_edge(source, target)`
+- If should skip, filter out this edge from resolution candidates
+- Prevents wasting turns on edges that LLM consistently validates as invalid
+
+**Critical Invariants**:
+1. Edge key format: `{source_id}→{target_id}` (directional)
+2. Threshold configurable (default: 2 attempts)
+3. Unbounded dictionary growth mitigated by session reset
+
+---
+
 ## Decision Module
 
-### 9. StrategySelector ([src/decision/strategy.py](src/decision/strategy.py))
+### 11. StrategySelector ([src/decision/strategy.py](src/decision/strategy.py))
 
 **Purpose**: Choose the next interview strategy using multi-scorer arbitration.
 
@@ -627,7 +729,7 @@ InterviewController.process_response()
 
 ---
 
-### 10. Strategy ([src/decision/strategy.py](src/decision/strategy.py))
+### 12. Strategy ([src/decision/strategy.py](src/decision/strategy.py))
 
 **Purpose**: Define interview strategy intent, applicability conditions, and focus selection logic.
 
@@ -706,7 +808,7 @@ strategies:
 
 ---
 
-### 11. ArbitrationEngine ([src/decision/arbitration.py](src/decision/arbitration.py))
+### 13. ArbitrationEngine ([src/decision/arbitration.py](src/decision/arbitration.py))
 
 **Purpose**: Multi-scorer optimization to prevent monotonic interview behavior.
 
@@ -800,7 +902,7 @@ StrategySelector.select()
 
 ---
 
-### 12. StrategyScorer (Abstract Base) ([src/decision/arbitration.py](src/decision/arbitration.py))
+### 14. StrategyScorer (Abstract Base) ([src/decision/arbitration.py](src/decision/arbitration.py))
 
 **Purpose**: Abstract base class for scoring logic.
 
@@ -1102,7 +1204,7 @@ def _has_terminal_nodes(self, context) -> bool:
 
 ---
 
-### 13. Extractor ([src/decision/extraction.py](src/decision/extraction.py))
+### 15. Extractor ([src/decision/extraction.py](src/decision/extraction.py))
 
 **Purpose**: Extract graph deltas (nodes + edges) from respondent text using LLM.
 
@@ -1223,7 +1325,7 @@ InterviewController.process_response(response_text)
 
 ## Generation Module
 
-### 14. QuestionGenerator ([src/generation/generator.py](src/generation/generator.py))
+### 16. QuestionGenerator ([src/generation/generator.py](src/generation/generator.py))
 
 **Purpose**: Generate natural language questions based on strategy intent and focus.
 
@@ -1339,7 +1441,7 @@ InterviewController chooses strategy + focus
 
 ## Utils Module
 
-### 15. LLMManager ([src/utils/llm_manager.py](src/utils/llm_manager.py))
+### 17. LLMManager ([src/utils/llm_manager.py](src/utils/llm_manager.py))
 
 **Purpose**: Unified interface for multiple LLM providers with cost tracking.
 
@@ -1458,7 +1560,7 @@ def complete(self, task, system_prompt, user_prompt, **kwargs) -> LLMResponse:
 
 ---
 
-### 16. InterviewLogger ([src/utils/logger.py](src/utils/logger.py))
+### 18. InterviewLogger ([src/utils/logger.py](src/utils/logger.py))
 
 **Purpose**: Session-level logging for interview tracking and debugging.
 
@@ -1490,54 +1592,149 @@ def complete(self, task, system_prompt, user_prompt, **kwargs) -> LLMResponse:
 
 ---
 
-### 17. ConceptParser ([src/utils/concept_parser.py](src/utils/concept_parser.py))
+### 19. ConceptParser ([src/utils/concept_parser.py](src/utils/concept_parser.py))
 
-**Purpose**: Parse stimulus concept text to extract reference elements.
+**Purpose**: Parse stimulus concept text and classify elements into structured types using LLM-based semantic parsing.
 
 **Responsibilities**:
-- Extract elements from structured concept text
-- Parse element requirements (reaction, comprehension, connections)
-- Create ReferenceElement objects
+- Parse concept files (markdown format) or raw text
+- Classify elements into Insight/Promise/RTB with type subcategories
+- Generate CoverageState configuration automatically
+- Provide fallback heuristic parsing when LLM unavailable
 
-**Dependencies**: None (pure parser)
+**Dependencies**:
+- `LLMManager` (for LLM-based parsing)
+- `utils.logger` (for logging)
 
 **Dependents**:
-- `InterviewController` (parses concept at initialization)
+- `InterviewController` (parses concept at initialization via `from_concept_file()`)
 
-**Parsing Format**:
-```
-Concept: Mobile Banking App
+**Element Classification System**:
 
-Elements:
-- Security [reaction, comprehension]
-  Requires: Trust, Peace of Mind
-- Convenience [reaction]
-- Design [reaction, comprehension]
-  Requires: Usability
-```
+| Category | Type Subcategories | Purpose |
+|----------|-------------------|---------|
+| **Insight** | problem, tension, frustration, unmet_need | Consumer pain point or need |
+| **Promise** | solution, benefit, outcome | Product value proposition |
+| **RTB** | evidence, feature, mechanism, proof | Reason to believe the promise |
 
-**Output**:
+**Data Structures**:
 ```python
-[
-    ReferenceElement(
-        id="security",
-        label="Security",
-        requires_reaction=True,
-        requires_comprehension=True,
-        connection_requirements=[
-            ConnectionRequirement(target_element_id="trust"),
-            ConnectionRequirement(target_element_id="peace_of_mind")
-        ]
-    ),
-    ...
-]
+class ConceptElements(BaseModel):
+    insight: str = Field(default="")
+    insight_type: str = Field(default="problem")  # problem|tension|frustration|unmet_need
+    promise: str = Field(default="")
+    promise_type: str = Field(default="solution")  # solution|benefit|outcome
+    rtb: str = Field(default="")
+    rtb_type: str = Field(default="evidence")  # evidence|feature|mechanism|proof
+    full_text: str = Field(default="")
+
+class ParsedConcept(BaseModel):
+    name: str
+    description: str
+    elements: ConceptElements
+    source_path: Optional[str]
 ```
+
+**Key Methods**:
+
+| Method | Return Type | Purpose |
+|--------|-------------|---------|
+| `parse_file(path)` | `ParsedConcept` | Parse concept from markdown file |
+| `parse_text(text, name)` | `ParsedConcept` | Parse concept from raw text |
+| `get_element_config()` | `Dict[str, Any]` | Convert to CoverageState format with requirements |
+| `_parse_elements_with_llm(text)` | `ConceptElements` | LLM-based semantic parsing |
+| `_parse_elements_heuristic(text)` | `ConceptElements` | Fallback heuristic parsing |
+
+**Element Configuration Generation**:
+```python
+def get_element_config(self) -> Dict[str, Any]:
+    """Generate CoverageState configuration from parsed elements."""
+    config = {
+        "insight": {
+            "content": self.elements.insight,
+            "element_type": self.elements.insight_type,
+            "requirements": {
+                "mention": True,
+                "reaction": True,
+                "comprehension": False,
+                "connections_to": []
+            }
+        },
+        "promise": {
+            "content": self.elements.promise,
+            "element_type": self.elements.promise_type,
+            "requirements": {
+                "mention": True,
+                "reaction": True,
+                "comprehension": False,
+                "connections_to": ["insight"]  # Auto-link promise to insight
+            }
+        },
+        "rtb": {
+            "content": self.elements.rtb,
+            "element_type": self.elements.rtb_type,
+            "requirements": {
+                "mention": True,
+                "reaction": True,
+                "comprehension": True,  # RTB requires comprehension check
+                "connections_to": ["promise"]  # Auto-link RTB to promise
+            }
+        }
+    }
+    return config
+```
+
+**Parsing Strategies**:
+
+1. **LLM-Based Parsing** (primary):
+   - Uses TaskType.CONCEPT_PARSING task
+   - Prompts LLM to identify insight, promise, RTB and classify types
+   - Captures semantic nuances and implicit relationships
+
+2. **Heuristic Parsing** (fallback):
+   - Pattern matching for common concept formats
+   - Simple text segmentation
+   - Used when LLM unavailable
+
+**Example Input/Output**:
+
+**Input** (Oat_Milk_ME1.md):
+```markdown
+An oat-based milk alternative made with an enzyme process that increases
+the natural creaminess of Scandinavian oats, without added thickeners.
+```
+
+**Output** (ParsedConcept):
+```python
+ParsedConcept(
+    name="Oat_Milk_ME1",
+    description="An oat-based milk alternative...",
+    elements=ConceptElements(
+        insight="Need for creamy plant-based milk without additives",
+        insight_type="unmet_need",
+        promise="Natural creaminess without thickeners",
+        promise_type="benefit",
+        rtb="Enzyme process that enhances Scandinavian oats",
+        rtb_type="mechanism"
+    )
+)
+```
+
+**Integration with Coverage Tracking**:
+- Parsed elements automatically generate coverage requirements
+- Insight→Promise→RTB chain creates connection requirements
+- Element types inform interview strategy (e.g., RTB requires comprehension check)
+
+**File Format Support**:
+- Markdown (.md) files with concept description
+- Raw text strings
+- Concept name extracted from filename or specified manually
 
 ---
 
 ## UI Module
 
-### 18. GradioApp ([src/ui/gradio_app.py](src/ui/gradio_app.py))
+### 20. GradioApp ([src/ui/gradio_app.py](src/ui/gradio_app.py))
 
 **Purpose**: Web interface for conducting interviews.
 
@@ -1593,7 +1790,7 @@ User types response
 
 ## Controller
 
-### 19. InterviewController ([src/controller.py](src/controller.py))
+### 21. InterviewController ([src/controller.py](src/controller.py))
 
 **Purpose**: Main orchestrator for interview loop.
 
@@ -1825,6 +2022,8 @@ def should_close(self) -> bool:
 | **GraphState** | Graph, Schema, History | StrategySelector, Strategy, InterviewController |
 | **CoverageState** | Graph, ReferenceElement | StrategySelector, Strategy, Extractor, InterviewController |
 | **Momentum** | - | Extractor, StrategySelector, QuestionGenerator, InterviewController |
+| **NodeFocusTracker** | - | InterviewController |
+| **EdgeFocusTracker** | - | InterviewController |
 | **StrategySelector** | Strategy, ArbitrationEngine, GraphState, CoverageState, Momentum | InterviewController |
 | **Strategy** | GraphState, CoverageState, Momentum | StrategySelector, ArbitrationEngine |
 | **ArbitrationEngine** | StrategyScorer (9 subclasses) | StrategySelector |

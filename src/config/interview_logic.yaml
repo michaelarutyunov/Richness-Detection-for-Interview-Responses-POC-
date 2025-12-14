@@ -1,5 +1,13 @@
 # Universal interview logic - schema agnostic
 
+# Extraction configuration
+extraction:
+  semantic_deduplication:
+    method: "hybrid"  # "jaccard" | "embeddings" | "hybrid"
+    jaccard_threshold: 0.75
+    embeddings_enabled: true  # Phase 2B: Full semantic embeddings with local model
+    embeddings_threshold: 0.80
+
 strategies:
   # Priority order matters - listed from highest to lowest priority
   
@@ -173,10 +181,8 @@ tactics:
 
 
 # Arbitration configuration for utility-based strategy selection
-# When enabled, replaces first-applicable-wins with multi-scorer evaluation
+# Uses multi-scorer evaluation to select the best strategy
 arbitration:
-  enabled: true  # Set to false to use legacy first-applicable-wins selection
-
   scorers:
     # Prevents repetitive questions (similarity > threshold gets penalized)
     redundancy:
@@ -193,8 +199,8 @@ arbitration:
     # Adjusts strategy based on engagement level
     momentum_alignment:
       weight: 1.0
-      breadth_boost: 1.5   # Boost for breadth strategies when low momentum
-      depth_penalty: 0.5   # Penalty for depth strategies when low momentum
+      breadth_boost: 1.1   # Boost for breadth strategies when low momentum (reduced from 1.5)
+      depth_penalty: 0.2   # Penalty for depth strategies when low momentum (reduced from 0.5)
       depth_boost: 1.3     # Boost for depth strategies when high momentum
 
     # Penalizes recently-used strategies for diversity
@@ -204,34 +210,33 @@ arbitration:
       penalty: 0.7
 
     # Boosts vertical exploration when graph is horizontally saturated
-    # Also boosts when approaching value nodes (value ladder completion)
+    # Also boosts when approaching terminal nodes (ladder completion)
     vertical_laddering:
       weight: 1.0  # Increased from 0.8
       boost: 1.5
-      value_proximity_boost: 1.8  # Boost when near value node
-      value_closure_boost: 2.0    # Strong boost for final ladder step
-      near_value_depth: 2         # Depth from value to trigger boost
+      terminal_proximity_boost: 1.8  # Boost when near terminal node
+      terminal_closure_boost: 2.0    # Strong boost for final ladder step
+      near_terminal_depth: 2         # Depth from terminal to trigger boost
 
     # Detects stale branches and triggers breadth exploration
-    # More aggressive detection to prevent stuck loops
     branch_health:
-      weight: 1.0  # Increased from 0.7
-      stale_threshold: 2          # Reduced from 3 for faster detection
-      breadth_boost: 1.8          # Increased from 1.5
-      depth_penalty: 0.3          # More severe (was 0.6)
+      weight: 1.0
+      stale_threshold: 4          # Allow 4 turns before declaring stale (increased from 2)
+      breadth_boost: 1.2          # Reduced from 1.8 - depth > breadth for MEC
+      depth_penalty: 0.15         # Softened from 0.3
       severe_stale_threshold: 4   # Very stale branch threshold
-      severe_depth_penalty: 0.1   # Near-zero for very stale
+      # severe_depth_penalty removed - was too destructive (0.1)
       connect_isolate_penalty: 0.5  # Also penalize connect_isolate on stale
 
     # Distinguishes knowledge lack from exploration lack
     # Hard coverage priority for first-time elements
     coverage_quality:
-      weight: 1.0  # Increased from 0.9
+      weight: 1.0
       penalty: 0.4
       boost: 1.2
       first_touch_boost: 2.5      # Strong boost when focus_count=0
       exhaustion_threshold: 2     # Turns probing without new edges
-      exhaustion_penalty: 0.15    # Severe penalty for exhausted gaps
+      exhaustion_penalty: 1.2     # Strong deterrent - STOP drilling exhausted elements (increased from 0.15)
 
     # Controls timing of schema tension resolution
     # Only resolves when both nodes have been explored
@@ -242,10 +247,10 @@ arbitration:
       min_exploration: 1          # Min times each node must be explored
 
     # Detects when interview should enter reflection/closing mode
-    # Triggers when coverage complete, no new nodes, values exist
+    # Triggers when coverage complete, no new nodes, terminal nodes exist (schema-agnostic)
     reflection_mode:
       weight: 1.0
       no_new_nodes_threshold: 3   # Turns without new nodes
       depth_penalty: 0.2          # Heavy penalty for depth strategies
       reflection_boost: 2.0       # Strong boost for reflection
-      min_value_nodes: 1          # Minimum value nodes required
+      min_terminal_nodes: 0

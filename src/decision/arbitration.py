@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from decision.strategy import Strategy, FocusTarget
 
 from core.graph import Graph, Node
+from core.schema import Schema
 from core.state import (
     GraphState,
     CoverageState,
@@ -38,6 +39,7 @@ class ScoringContext:
     momentum: Momentum
     history: History
     recent_questions: List[str]  # Last 6 questions for deduplication
+    schema: Optional[Schema] = None  # Schema for terminal type detection
     node_focus_tracker: Optional[NodeFocusTracker] = None
     edge_focus_tracker: Optional[EdgeFocusTracker] = None
 
@@ -49,6 +51,7 @@ class ScoringContext:
         coverage_state: CoverageState,
         momentum: Momentum,
         history: History,
+        schema: Optional[Schema] = None,
         node_focus_tracker: Optional[NodeFocusTracker] = None,
         edge_focus_tracker: Optional[EdgeFocusTracker] = None
     ) -> "ScoringContext":
@@ -60,6 +63,7 @@ class ScoringContext:
             momentum=momentum,
             history=history,
             recent_questions=history.get_recent_questions(6),
+            schema=schema,
             node_focus_tracker=node_focus_tracker,
             edge_focus_tracker=edge_focus_tracker
         )
@@ -414,20 +418,16 @@ class VerticalLadderingScorer(StrategyScorer):
     boosts strategies that encourage vertical exploration.
 
     Problem Fixed: All nodes are sensory/mechanical, no values/meaning
+
+    NOTE: Uses schema.is_terminal_type() for methodology-agnostic terminal detection.
+    Works with MEC (value nodes) and JTBD (constraint nodes) schemas.
     """
 
     name = "vertical_laddering"
     boost_multiplier: float = 1.5
-    value_proximity_boost: float = 1.8
-    value_closure_boost: float = 2.0
-    near_value_depth: int = 2
-
-    # Node types considered "abstract" or "value" (meaning-focused)
-    abstract_types = ["value", "belief", "goal", "need", "motivation", "meaning"]
-    concrete_types = ["feature", "attribute", "action", "process", "sensory"]
-
-    # High abstraction types for value proximity
-    high_abstraction_types = ["psychosocial_consequence", "value", "belief", "goal"]
+    terminal_proximity_boost: float = 1.8  
+    terminal_closure_boost: float = 2.0    
+    near_terminal_depth: int = 2           
 
     # Strategies that encourage vertical exploration
     vertical_strategies = ["deepen_branch"]  # Uses upward_linking tactic
@@ -435,14 +435,14 @@ class VerticalLadderingScorer(StrategyScorer):
     def __init__(
         self,
         boost: float = 1.5,
-        value_proximity_boost: float = 1.8,
-        value_closure_boost: float = 2.0,
-        near_value_depth: int = 2
+        terminal_proximity_boost: float = 1.8,
+        terminal_closure_boost: float = 2.0,
+        near_terminal_depth: int = 2
     ):
         self.boost_multiplier = boost
-        self.value_proximity_boost = value_proximity_boost
-        self.value_closure_boost = value_closure_boost
-        self.near_value_depth = near_value_depth
+        self.terminal_proximity_boost = terminal_proximity_boost
+        self.terminal_closure_boost = terminal_closure_boost
+        self.near_terminal_depth = near_terminal_depth
 
     def score(
         self,
@@ -450,13 +450,13 @@ class VerticalLadderingScorer(StrategyScorer):
         focus: "FocusTarget",
         context: ScoringContext
     ) -> float:
-        # Check value proximity FIRST for deepen_branch
+        # Check terminal proximity FIRST for deepen_branch
         if strategy.id == "deepen_branch":
-            proximity_score = self._get_value_proximity_score(focus, context)
+            proximity_score = self._get_terminal_proximity_score(focus, context)
             if proximity_score > 1.0:
                 return proximity_score
 
-        # Check if graph is horizontally saturated
+        # Check if graph is horizontally saturated (few terminal nodes)
         if not self._is_horizontally_saturated(context):
             return 1.0
 
@@ -478,35 +478,47 @@ class VerticalLadderingScorer(StrategyScorer):
 
         return 1.0
 
-    def _get_value_proximity_score(self, focus: "FocusTarget", context: ScoringContext) -> float:
-        """Calculate boost based on proximity to value nodes."""
+    def _is_terminal_type(self, node: Node, context: ScoringContext) -> bool:
+        """Check if node is a terminal type using schema (methodology-agnostic)."""
+        if not node.node_type:
+            return False
+        # Use schema if available, otherwise fall back to checking graph_state.terminal_nodes
+        if context.schema:
+            return context.schema.is_terminal_type(node.node_type)
+        # Fallback: check if node is in terminal_nodes list
+        return any(n.id == node.id for n in context.graph_state.terminal_nodes)
+
+    def _get_terminal_proximity_score(self, focus: "FocusTarget", context: ScoringContext) -> float:
+        """Calculate boost based on proximity to terminal nodes (schema-agnostic)."""
         if not focus.node:
             return 1.0
 
         node = focus.node
 
-        # If current node is high abstraction: return value_closure_boost
-        if node.node_type and any(t in node.node_type.lower() for t in self.high_abstraction_types):
+        # If current node is terminal type: return terminal_closure_boost
+        if self._is_terminal_type(node, context):
             logger.info(
                 f"[{self.name}] deepen_branch | "
-                f"score={self.value_closure_boost:.2f} | reason=node is high abstraction type ({node.node_type})"
+                f"score={self.terminal_closure_boost:.2f} | reason=node is terminal type ({node.node_type})"
             )
-            return self.value_closure_boost
+            return self.terminal_closure_boost
 
-        # Check depth to nearest value node
-        depth = self._get_depth_to_value(node, context.graph)
-        if depth is not None and depth <= self.near_value_depth:
+        # Check depth to nearest terminal node
+        depth = self._get_depth_to_terminal(node, context)
+        if depth is not None and depth <= self.near_terminal_depth:
             logger.info(
                 f"[{self.name}] deepen_branch | "
-                f"score={self.value_proximity_boost:.2f} | reason=node is {depth} steps from value node"
+                f"score={self.terminal_proximity_boost:.2f} | reason=node is {depth} steps from terminal node"
             )
-            return self.value_proximity_boost
+            return self.terminal_proximity_boost
 
         return 1.0
 
-    def _get_depth_to_value(self, node: Node, graph: Graph) -> Optional[int]:
-        """Get minimum depth from node to any value-type node via outgoing edges using BFS."""
+    def _get_depth_to_terminal(self, node: Node, context: ScoringContext) -> Optional[int]:
+        """Get minimum depth from node to any terminal-type node via outgoing edges using BFS."""
         from collections import deque
+
+        graph = context.graph
 
         # BFS queue: (current_node_id, depth)
         queue = deque([(node.id, 0)])
@@ -528,39 +540,38 @@ class VerticalLadderingScorer(StrategyScorer):
                 target_node = graph.get_node(target_id)
 
                 if target_node and target_node.node_type:
-                    # Check if target is a value-type node
-                    if any(t in target_node.node_type.lower() for t in self.high_abstraction_types):
+                    # Check if target is a terminal-type node using schema
+                    if self._is_terminal_type(target_node, context):
                         return depth + 1
 
                 # Add to queue for further exploration
                 queue.append((target_id, depth + 1))
 
-        return None  # No value node reachable
+        return None  # No terminal node reachable
 
     def _is_horizontally_saturated(self, context: ScoringContext) -> bool:
-        """Check if graph has too many concrete nodes vs abstract."""
+        """Check if graph has too few terminal nodes vs total nodes."""
         nodes = list(context.graph.nodes.values())
 
         if len(nodes) < 5:
             return False  # Not enough nodes to judge
 
-        abstract_count = 0
-        concrete_count = 0
+        terminal_count = 0
+        non_terminal_count = 0
 
         for node in nodes:
             if not node.node_type:
                 continue
-            node_type = node.node_type.lower()
-            if any(t in node_type for t in self.abstract_types):
-                abstract_count += 1
-            elif any(t in node_type for t in self.concrete_types):
-                concrete_count += 1
+            if self._is_terminal_type(node, context):
+                terminal_count += 1
+            else:
+                non_terminal_count += 1
 
-        # Consider saturated if < 20% abstract nodes
-        total = abstract_count + concrete_count
+        # Consider saturated if < 20% terminal nodes
+        total = terminal_count + non_terminal_count
         if total > 0:
-            abstract_ratio = abstract_count / total
-            if abstract_ratio < 0.2:
+            terminal_ratio = terminal_count / total
+            if terminal_ratio < 0.2:
                 return True
 
         return False
@@ -577,9 +588,9 @@ class BranchHealthScorer(StrategyScorer):
     """
 
     name = "branch_health"
-    stale_threshold: int = 2  # Reduced from 3
-    breadth_boost: float = 1.8  # Increased from 1.5
-    depth_penalty: float = 0.3  # More severe (was 0.6)
+    stale_threshold: int = 2  
+    breadth_boost: float = 1.8  
+    depth_penalty: float = 0.3  
     severe_stale_threshold: int = 4
     severe_depth_penalty: float = 0.1
     connect_isolate_penalty: float = 0.5
@@ -866,9 +877,12 @@ class ReflectionModeScorer(StrategyScorer):
     Triggers when:
     - Coverage gaps = 0 (all elements touched)
     - No new nodes for N turns
-    - Value nodes exist in graph
+    - Terminal nodes exist in graph (schema-agnostic)
 
     Applies heavy penalty to depth strategies and boosts reflection strategies.
+
+    NOTE: Uses schema.is_terminal_type() for methodology-agnostic terminal detection.
+    Works with MEC (value nodes) and JTBD (constraint nodes) schemas.
     """
 
     name = "reflection_mode"
@@ -878,7 +892,7 @@ class ReflectionModeScorer(StrategyScorer):
     depth_penalty: float = 0.2
     reflection_boost: float = 2.0
     breadth_boost_in_reflection: float = 1.3
-    min_value_nodes: int = 1
+    min_terminal_nodes: int = 1
 
     # Strategy classifications
     depth_strategies = ["deepen_branch", "resolve_schema_tension", "connect_isolate"]
@@ -889,12 +903,12 @@ class ReflectionModeScorer(StrategyScorer):
         no_new_nodes_threshold: int = 3,
         depth_penalty: float = 0.2,
         reflection_boost: float = 2.0,
-        min_value_nodes: int = 1
+        min_terminal_nodes: int = 1
     ):
         self.no_new_nodes_threshold = no_new_nodes_threshold
         self.depth_penalty = depth_penalty
         self.reflection_boost = reflection_boost
-        self.min_value_nodes = min_value_nodes
+        self.min_terminal_nodes = min_terminal_nodes
 
     def score(self, strategy, focus, context):
         if not self._should_enter_reflection_mode(context):
@@ -929,14 +943,14 @@ class ReflectionModeScorer(StrategyScorer):
         if not self._no_new_nodes_recently(context):
             return False
 
-        # Condition 3: Value nodes exist
-        if not self._has_value_nodes(context):
+        # Condition 3: Terminal nodes exist (schema-agnostic)
+        if not self._has_terminal_nodes(context):
             return False
 
         logger.info(
             f"[reflection_mode] TRIGGERED | "
             f"coverage_complete=True, no_new_nodes_turns>={self.no_new_nodes_threshold}, "
-            f"value_nodes>={self.min_value_nodes}"
+            f"terminal_nodes>={self.min_terminal_nodes}"
         )
         return True
 
@@ -948,14 +962,21 @@ class ReflectionModeScorer(StrategyScorer):
                 return False
         return True
 
-    def _has_value_nodes(self, context: ScoringContext) -> bool:
-        """Check if graph has value-type nodes."""
-        value_types = ["value", "belief", "goal", "need", "motivation"]
-        value_count = 0
+    def _has_terminal_nodes(self, context: ScoringContext) -> bool:
+        """Check if graph has terminal-type nodes (schema-agnostic)."""
+        terminal_count = 0
         for node in context.graph.nodes.values():
-            if node.node_type and any(t in node.node_type.lower() for t in value_types):
-                value_count += 1
-        return value_count >= self.min_value_nodes
+            if not node.node_type:
+                continue
+            # Use schema if available, otherwise fall back to graph_state.terminal_nodes
+            if context.schema:
+                if context.schema.is_terminal_type(node.node_type):
+                    terminal_count += 1
+            else:
+                # Fallback: check if node is in terminal_nodes list
+                if any(n.id == node.id for n in context.graph_state.terminal_nodes):
+                    terminal_count += 1
+        return terminal_count >= self.min_terminal_nodes
 
 
 class ArbitrationEngine:
@@ -1118,9 +1139,9 @@ class ArbitrationEngine:
             elif scorer_name == "vertical_laddering":
                 scorers.append(VerticalLadderingScorer(
                     boost=scorer_config.get("boost", 1.5),
-                    value_proximity_boost=scorer_config.get("value_proximity_boost", 1.8),
-                    value_closure_boost=scorer_config.get("value_closure_boost", 2.0),
-                    near_value_depth=scorer_config.get("near_value_depth", 2)
+                    terminal_proximity_boost=scorer_config.get("terminal_proximity_boost", 1.8),
+                    terminal_closure_boost=scorer_config.get("terminal_closure_boost", 2.0),
+                    near_terminal_depth=scorer_config.get("near_terminal_depth", 2)
                 ))
 
             elif scorer_name == "branch_health":
@@ -1154,7 +1175,7 @@ class ArbitrationEngine:
                     no_new_nodes_threshold=scorer_config.get("no_new_nodes_threshold", 3),
                     depth_penalty=scorer_config.get("depth_penalty", 0.2),
                     reflection_boost=scorer_config.get("reflection_boost", 2.0),
-                    min_value_nodes=scorer_config.get("min_value_nodes", 1)
+                    min_terminal_nodes=scorer_config.get("min_terminal_nodes", 1)
                 ))
 
         # If no scorers configured, use defaults

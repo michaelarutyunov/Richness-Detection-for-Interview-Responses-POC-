@@ -18,6 +18,10 @@ gradio>=6.0.0,<7.0.0
 # Data & Utilities
 python-dateutil==2.8.2
 
+# Semantic Deduplication (Phase 2B)
+sentence-transformers>=2.2.0
+numpy>=1.24.0  # Required by sentence-transformers
+
 # Optional: Visualization (for debugging)
 matplotlib>=3.8.2
 plotly>=5.18.0

@@ -14,12 +14,12 @@ question_generation_model: "anthropic" # Options: anthropic, kimi, openai, deeps
 extraction_specs:
   graph_extraction:
     temperature: 0.3      # Consistent, focused extraction
-    max_tokens: 1000      # Sufficient for structured data
-    timeout_seconds: 15   # Fast extraction
+    max_tokens: 1500      # Sufficient for structured data
+    timeout_seconds: 40   # Fast extraction
     
   question_generation:
-    temperature: 0.7      # Balanced creativity for questions
-    max_tokens: 300       # Typical question length
+    temperature: 0.6      # Balanced creativity for questions
+    max_tokens: 250       # Typical question length
     timeout_seconds: 20   # Adequate for generation
 
 # ============================================================================
@@ -30,6 +30,7 @@ extraction_specs:
 #   - request_timeout: API timeout in seconds (optional, defaults to 30s)
 #   - cost_input: USD per 1M input tokens (optional, for cost tracking)
 #   - cost_output: USD per 1M output tokens (optional, for cost tracking)
+#   - source: [LINK](https://www.llm-prices.com/)
 # ============================================================================
 providers:
   kimi:
@@ -39,7 +40,7 @@ providers:
     models:
       graph_extraction:
         name: "kimi-k2-0905-preview"
-        request_timeout: 15
+        request_timeout: 40
         cost_input: 0.60
         cost_output: 2.50
       question_generation:
@@ -55,7 +56,7 @@ providers:
     models:
       graph_extraction:
         name: "claude-haiku-4-5-20251001"
-        request_timeout: 15
+        request_timeout: 40
         cost_input: 1.00
         cost_output: 5.00
       question_generation:
@@ -66,13 +67,13 @@ providers:
 
   openai:
     api_key_env: "OPENAI_API_KEY"
-    base_url: null
+    base_url: "https://api.openai.com/v1"
     organization: null
     request_timeout: 30
     models:
       graph_extraction:
         name: "gpt-5-mini"
-        request_timeout: 15
+        request_timeout: 40
         cost_input: 0.25
         cost_output: 2.00
       question_generation:
@@ -88,7 +89,7 @@ providers:
     models:
       graph_extraction:
         name: "deepseek-chat"
-        request_timeout: 15
+        request_timeout: 40
         cost_input: 0.27
         cost_output: 1.10
       question_generation:
